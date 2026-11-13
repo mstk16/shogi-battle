@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.16";
+const VERSION="0.9.17";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -530,7 +530,7 @@ async function analyzeMove(q){
   evBusy=false;
   const an=analyzeFrom(R0,q.mv);
   if(!an){const sd0=q.side||0,hb0=hangVal(q.b,sd0),hp0=hangVal(applyMove(q.b,q.mv).n,sd0),hg=(hp0-hb0)>=45;
-   const e0={no:q.no,side:sd0,dep:0,tie:0,tied:0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:0,mk:'△',g:'疑問手',gc:'g2',unclear:!hg,hang:hg,rk:0,nAll:0,after:0,bestT:'',bestV:0,same:false,bwhy:[],pwhy:whyMove(q.b,q.mv),reply:'',quiet:false};
+   const e0={no:q.no,side:sd0,dep:0,tie:0,tied:0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:0,mk:'△',g:'疑問手',gc:'g2',unclear:!hg,hang:hg,rk:0,nAll:0,after:0,bestT:'',bestV:0,same:false,bwhy:[],pwhy:whyMove(q.b,q.mv),reply:'',quiet:false,pre:q.b,mo:q.mv,bm:null};
    rec.push(e0);curEv=e0;renderEv();render();return}
   const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss),bV=clV(an.best.v),pV=clV(an.played.v);
   // はっきり言える時だけ評価する: 読みが浅い・どの手も同じ点数・どの手でも詰まされる・詰み同士 は「評価なし」
@@ -542,7 +542,7 @@ async function analyzeMove(q){
   const bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
   const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g2[0],g:g2[1],gc:g2[2],unclear:unclear,hang:hang,rk:an.rank,nAll:an.nAll,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
-   bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX)};
+   bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX),pre:q.b,mo:q.mv,bm:bl};
   rec.push(e);curEv=e;
   if(aiLevel===5&&humOne()&&hist.length>=4&&!unclear){
    const w=Math.max(0.08,1/(ad.n+1));ad.acpl+=(Math.min(600,loss)-ad.acpl)*w;ad.n++;ad.samples++;
@@ -595,6 +595,28 @@ function drawHints(){
 }
 window.addEventListener('resize',()=>{drawHints();drawLast()});
 function showPanel(txt){const p=document.getElementById('pnl');document.getElementById('pt').textContent=txt;p.style.display='flex'}
+function showPanelHTML(h){const p=document.getElementById('pnl');document.getElementById('pt').innerHTML=h;p.style.display='flex'}
+const escH=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+// 総合評価用の小さな盤: 指す前の局面に、あなたの手(赤)と最善手(青)を矢印で重ねる
+function miniBoard(x,mv,bm){
+ const Z=22,W=Z*9,pt=(r,c)=>[c*Z+Z/2,r*Z+Z/2];
+ let g='<rect x="0" y="0" width="'+W+'" height="'+W+'" fill="#E8C98A" stroke="#6B4A1E" stroke-width="1.5"/>';
+ for(let i=1;i<9;i++)g+='<line x1="'+i*Z+'" y1="0" x2="'+i*Z+'" y2="'+W+'" stroke="#8A6A3A" stroke-width=".6"/><line x1="0" y1="'+i*Z+'" x2="'+W+'" y2="'+i*Z+'" stroke="#8A6A3A" stroke-width=".6"/>';
+ for(let r=0;r<9;r++)for(let c=0;c<9;c++){const pc=x.b[idx(r,c)];if(!pc)continue;const q=pt(r,c);
+  g+='<text x="'+q[0]+'" y="'+(q[1]+5)+'" text-anchor="middle" font-size="15" font-weight="500" fill="'+(pc.p?'#9D211A':'#2A1807')+'"'+(pc.s===1?' transform="rotate(180 '+q[0]+' '+q[1]+')"':'')+'>'+pnm(pc)+'</text>'}
+ const arrow=(m,col,id,dash)=>{
+  const t=pt(m.to[0],m.to[1]);let o='<circle cx="'+t[0]+'" cy="'+t[1]+'" r="'+(Z*.46)+'" fill="'+col+'" fill-opacity=".25" stroke="'+col+'" stroke-width="2"/>';
+  if(m.d){o+='<text x="'+t[0]+'" y="'+(t[1]+5)+'" text-anchor="middle" font-size="14" font-weight="500" fill="'+col+'">'+m.d+'</text>';return o}
+  const f=pt(m.f[0],m.f[1]),L=Math.hypot(t[0]-f[0],t[1]-f[1])||1,ux=(t[0]-f[0])/L,uy=(t[1]-f[1])/L;
+  o+='<circle cx="'+f[0]+'" cy="'+f[1]+'" r="'+(Z*.46)+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-dasharray="3 2"/>';
+  o+='<line x1="'+(f[0]+ux*Z*.3)+'" y1="'+(f[1]+uy*Z*.3)+'" x2="'+(t[0]-ux*Z*.4)+'" y2="'+(t[1]-uy*Z*.4)+'" stroke="'+col+'" stroke-width="3" stroke-linecap="round" marker-end="url(#'+id+')"/>';
+  return o};
+ const mk=(id,col)=>'<marker id="'+id+'" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="3.4" markerHeight="3.4" orient="auto"><path d="M0 0L10 5L0 10z" fill="'+col+'"/></marker>';
+ g='<defs>'+mk('sma','#185FA5')+mk('smb','#A82A08')+'</defs>'+g;
+ if(bm)g+=arrow(bm,'#185FA5','sma');
+ g+=arrow(mv,'#A82A08','smb');
+ return '<svg viewBox="0 0 '+W+' '+W+'" width="'+W+'" height="'+W+'" style="display:block;border-radius:4px">'+g+'</svg>';
+}
 function showEvDetail(){
  const e=curEv;if(!e)return;
  const L=['第'+e.no+'手 '+e.t+'　'+(e.unclear?'評価なし':e.mk+' '+e.g),(e.rk?'全'+e.nAll+'手の中で '+e.rk+'位':'')+'　形勢 '+fmtAdv(e.bestV)+' → '+fmtAdv(e.after)+'（最善手との差 歩 '+(e.loss/100).toFixed(1)+' 個ぶん）'];
@@ -612,12 +634,19 @@ function showSummary(){
  const v=rec.filter(x=>x);if(!v.length){showPanel('評価データがありません。\n評価がオフだったか、対局が短すぎました。');return}
  const rated=v.filter(x=>!x.unclear),unr=v.length-rated.length,gl=rated.length?rated.reduce((a,x)=>a+Math.min(600,x.loss),0)/rated.length:200;
  const cnt={};for(const x of rated)cnt[x.mk]=(cnt[x.mk]||0)+1;
- const worst=[...rated].sort((a,b)=>b.loss-a.loss).slice(0,3).filter(x=>x.loss>GOODMAX);
+ const worst=[...rated].sort((a,b)=>b.loss-a.loss).slice(0,3).filter(x=>x.loss>GOODMAX).sort((a,b)=>a.no-b.no);
  const lv=ADN[Math.round(Math.max(0,Math.min(4,(260-gl)/60)))];
- const L=['総合評価（'+rated.length+'手を評価・'+unr+'手は評価なし）','◎ '+(cnt['◎']||0)+'　〇 '+(cnt['〇']||0)+'　△ '+(cnt['△']||0)+'　✖ '+(cnt['✖']||0),(rated.length>=10?'この対局の実力の目安: '+lv+'相当':'評価できた手が少ないので、実力の目安はまだ出せません')];
- if(worst.length){L.push('痛かった手');worst.forEach(x=>L.push('　第'+x.no+'手 '+x.t+'（最善は '+x.bestT+'）'))}
- if(hintCount)L.push('ヒントを使った回数: '+hintCount);
- showPanel(L.join('\n'));
+ let h='<div><b>総合評価</b>（'+rated.length+'手を評価・'+unr+'手は評価なし）</div><div>◎ '+(cnt['◎']||0)+'　〇 '+(cnt['〇']||0)+'　△ '+(cnt['△']||0)+'　✖ '+(cnt['✖']||0)+'</div><div>'+(rated.length>=10?'この対局の実力の目安: '+lv+'相当':'評価できた手が少ないので、実力の目安はまだ出せません')+'</div>';
+ if(worst.length){
+  h+='<div style="margin-top:10px"><b>形勢を大きく落とした手</b>（あなたの手のうち、最善手との差が大きい3手。手数の順）</div>';
+  h+='<div style="font-size:12px;color:var(--sub)"><span style="color:#E0543A">■</span>赤 = 実際に指した手　<span style="color:#3F86D6">■</span>青 = 最善だった手</div>';
+  worst.forEach(x=>{
+   h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line)"><div><b>第'+x.no+'手</b>　'+x.mk+' '+x.g+'　<span style="color:var(--sub);font-size:12px">（歩 '+(x.loss/100).toFixed(1)+' 個ぶん損）</span></div>'
+    +(x.pre&&x.mo?'<div style="margin:6px 0">'+miniBoard(x.pre,x.mo,x.bm)+'</div>':'')
+    +'<div><span style="color:#E0543A">■</span> 指した手: '+escH(x.t)+'</div><div><span style="color:#3F86D6">■</span> 最善手: '+escH(x.bestT)+'</div></div>'});
+ }else h+='<div style="margin-top:10px">大きく形勢を落とした手はありませんでした</div>';
+ if(hintCount)h+='<div style="margin-top:10px">ヒントを使った回数: '+hintCount+'</div>';
+ showPanelHTML(h);
 }
 function doHint(){
  if(st.win!==null||!isHum(st.turn)||aiBusy){say('人が指す番のときに使えます');return}

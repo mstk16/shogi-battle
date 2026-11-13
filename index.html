@@ -121,7 +121,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.9";
+const VERSION="0.9.11";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -456,7 +456,7 @@ function mvText(x,m,org){
  const pc=x.b[idx(m.f[0],m.f[1])];
  return (pc.s===0?'▲':'△')+sqN(m.to[0],m.to[1])+pnm(pc)+(m.pr?'成':'')+(org?'（'+sqN(m.f[0],m.f[1])+'から）':'');
 }
-function markOf(loss){if(loss<=30)return['◎','ほぼ落ちない','g0'];if(loss<=GOODMAX)return['〇','少し落ちた','g1'];if(loss<=300)return['△','だいぶ落ちた','g2'];return['✖','大きく落ちた','g3']}
+function markOf(loss){if(loss<=30)return['◎','最善','g0'];if(loss<=GOODMAX)return['〇','好手','g1'];if(loss<=300)return['△','疑問手','g2'];return['✖','悪手','g3']}
 const fmtAdv=v=>{if(v>=9000)return '詰み勝ち';if(v<=-9000)return '詰まされ';const f=Math.max(-99.9,Math.min(99.9,v/100));return (f>=0?'+':'')+f.toFixed(1)};
 const GOODMAX=150;
 const scoreOf=l=>Math.round(100*Math.exp(-l/220));
@@ -496,7 +496,10 @@ function rankPos(x,extra){
   if(d>=3){const r=Eng.rank(x,{depth:d,ms:900,only:miss});
    if(r.complete&&r.length===miss.length){C.list=C.list.concat(r).sort((a,b)=>b.v-a.v);return C}}
  }
- const i0=Eng.rank(x,{depth:3,ms:350});if(i0.length<2)return null;
+ let i0=Eng.rank(x,{depth:3,ms:350}),shallow=false;
+ if(!i0.complete){const a=Eng.rank(x,{depth:3,ms:1000});if(a.complete)i0=a;else{const b=Eng.rank(x,{depth:2,ms:800});if(!b.complete)return null;i0=b;shallow=true}}
+ if(i0.length<2)return null;
+ if(shallow){const res0={list:i0,all:i0,dep:2,tieDep:0,key:key};evCache.key=key;evCache.res=res0;return res0}
  const top=i0.slice(0,4).map(y=>y.m);ex.forEach(e=>{if(!top.includes(e))top.push(e)});
  let r2=Eng.rank(x,{depth:5,ms:400,only:top}),dep=5;
  if(r2.complete){const r3=Eng.rank(x,{depth:6,ms:700,only:top});if(r3.complete){r2=r3;dep=6}}
@@ -506,22 +509,30 @@ function rankPos(x,extra){
   if(tie.length>1){const r4=Eng.rank(x,{depth:8,ms:800,only:tie});
    if(r4.complete&&r4.length===tie.length){const mp=new Map(r4.map(y=>[y.m,y.v]));
     r2=r2.map(y=>mp.has(y.m)?{m:y.m,v:mp.get(y.m)}:y).sort((a,b)=>b.v-a.v);tieDep=8}}}
- const res={list:r2,dep:dep,tieDep:tieDep,key:key};evCache.key=key;evCache.res=res;return res;
+ const res={list:r2,all:i0,dep:dep,tieDep:tieDep,key:key};evCache.key=key;evCache.res=res;return res;
 }
 function analyze(stB,mv){
  const R=rankPos(stB,[mv]);if(!R)return null;
  const pi=Eng.intMove(mv),pl=R.list.find(x=>x.m===pi);if(!pl)return null;
  const best=R.list[0];
- return{best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
+ const p3=R.all.find(y=>y.m===pi),rk=p3?R.all.filter(y=>y.v>p3.v+1).length+1:0;
+ return{rank:rk,nAll:R.all.length,best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
 function analyzeMove(q){
  try{
-  const an=analyze(q.b,q.mv);if(!an)return;
+  const an=analyze(q.b,q.mv);
+  if(!an){const sd0=q.side||0,hb0=hangVal(q.b,sd0),hp0=hangVal(applyMove(q.b,q.mv).n,sd0),hg=(hp0-hb0)>=45;
+   const e0={no:q.no,side:sd0,dep:0,tie:0,tied:0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:0,mk:'△',g:'疑問手',gc:'g2',unclear:!hg,hang:hg,rk:0,nAll:0,after:0,bestT:'',bestV:0,same:false,bwhy:[],pwhy:whyMove(q.b,q.mv),reply:'',quiet:false};
+   rec.push(e0);curEv=e0;renderEv();render();return}
   const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss),bV=clV(an.best.v),pV=clV(an.played.v);
   // はっきり言える時だけ評価する: 読みが浅い・どの手も同じ点数・どの手でも詰まされる・詰み同士 は「評価なし」
-  const unclear=an.dep<5||(loss<=GOODMAX&&an.spread<=40)||bV<=-9000||(Math.abs(bV)>=9000&&Math.abs(pV)>=9000&&bV*pV>0);
+  const sd=q.side||0,hb=hangVal(q.b,sd),hpl=hangVal(applyMove(q.b,q.mv).n,sd);
+  const blm=matchLegal(q.b,Eng.objMove(an.best.m),sd),hbest=blm?hangVal(applyMove(q.b,blm).n,sd):hb;
+  const hang=!isB&&(hpl-hb)>=45&&(hpl-hbest)>=45;
+  let g2=g;if(hang&&loss<=GOODMAX)g2=markOf(GOODMAX+10);
+  const unclear=!hang&&(an.dep<5||(loss<=GOODMAX&&an.spread<=40)||bV<=-9000||(Math.abs(bV)>=9000&&Math.abs(pV)>=9000&&bV*pV>0));
   const bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
-  const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g[0],g:g[1],gc:g[2],unclear:unclear,after:clV(an.played.v),
+  const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g2[0],g:g2[1],gc:g2[2],unclear:unclear,hang:hang,rk:an.rank,nAll:an.nAll,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
    bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX)};
   rec.push(e);curEv=e;
@@ -567,7 +578,8 @@ window.addEventListener('resize',()=>drawHints());
 function showPanel(txt){const p=document.getElementById('pnl');document.getElementById('pt').textContent=txt;p.style.display='flex'}
 function showEvDetail(){
  const e=curEv;if(!e)return;
- const L=['第'+e.no+'手 '+e.t+'　'+(e.unclear?'評価なし':e.mk+' '+e.g),'形勢（＋が指した側に有利）: 指す前 '+fmtAdv(e.bestV)+' → 指した後 '+fmtAdv(e.after)+'　下がり幅 歩 '+(e.loss/100).toFixed(1)+' 個ぶん'];
+ const L=['第'+e.no+'手 '+e.t+'　'+(e.unclear?'評価なし':e.mk+' '+e.g),(e.rk?'全'+e.nAll+'手の中で '+e.rk+'位':'')+'　形勢 '+fmtAdv(e.bestV)+' → '+fmtAdv(e.after)+'（最善手との差 歩 '+(e.loss/100).toFixed(1)+' 個ぶん）'];
+ if(e.hang)L.push('点数は大きく変わらなくても、取られる駒を作る手は、いい手ではありません');
  if(e.unclear)L.push('差が付かない局面（または読み切れない局面）のため、評価は出していません');
  if(e.same)L.push('形勢が下がらない最善手でした'+(e.bwhy.length?'（'+e.bwhy.join('・')+'）':''));
  else{L.push('最善手: '+e.bestT+(e.bwhy.length?'\n　理由: '+e.bwhy.join('・'):'\n　理由: 駒の働きと形のバランスがよい'));

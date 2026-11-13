@@ -121,7 +121,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.4";
+const VERSION="0.9.6";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -487,25 +487,38 @@ const evCache={key:'',res:null};
 // 評価もヒントも、この1つの読みを使う(同じ局面なら結果を使い回す＝食い違わない)
 function rankPos(x,extra){
  const key=posKey(x)+'|'+x.turn,ex=(extra||[]).map(m=>Eng.intMove(m));
- if(evCache.key===key&&evCache.res&&ex.every(e=>evCache.res.list.some(y=>y.m===e)))return evCache.res;
+ const C=evCache.key===key?evCache.res:null;
+ if(C){
+  const miss=ex.filter(e=>!C.list.some(y=>y.m===e));
+  if(!miss.length)return C;
+  // 足りない手だけ、順位表と同じ深さで読んで足す(順位表そのものは作り直さない=結果が揺れない)
+  const d=C.tieDep||C.dep;
+  if(d>=3){const r=Eng.rank(x,{depth:d,ms:900,only:miss});
+   if(r.complete&&r.length===miss.length){C.list=C.list.concat(r).sort((a,b)=>b.v-a.v);return C}}
+ }
  const i0=Eng.rank(x,{depth:3,ms:350});if(i0.length<2)return null;
  const top=i0.slice(0,4).map(y=>y.m);ex.forEach(e=>{if(!top.includes(e))top.push(e)});
  let r2=Eng.rank(x,{depth:5,ms:400,only:top}),dep=5;
  if(r2.complete){const r3=Eng.rank(x,{depth:6,ms:700,only:top});if(r3.complete){r2=r3;dep=6}}
  if(!r2.complete){r2=i0;dep=3}
- const res={list:r2,dep:dep,key:key};evCache.key=key;evCache.res=res;return res;
+ let tieDep=0;
+ if(dep>=5){const bv=clV(r2[0].v),tie=r2.filter(y=>bv-clV(y.v)<=30).map(y=>y.m);
+  if(tie.length>1){const r4=Eng.rank(x,{depth:8,ms:800,only:tie});
+   if(r4.complete&&r4.length===tie.length){const mp=new Map(r4.map(y=>[y.m,y.v]));
+    r2=r2.map(y=>mp.has(y.m)?{m:y.m,v:mp.get(y.m)}:y).sort((a,b)=>b.v-a.v);tieDep=8}}}
+ const res={list:r2,dep:dep,tieDep:tieDep,key:key};evCache.key=key;evCache.res=res;return res;
 }
 function analyze(stB,mv){
  const R=rankPos(stB,[mv]);if(!R)return null;
  const pi=Eng.intMove(mv),pl=R.list.find(x=>x.m===pi);if(!pl)return null;
  const best=R.list[0];
- return{best:best,played:pl,dep:R.dep,loss:Math.max(0,clV(best.v)-clV(pl.v))};
+ return{best:best,played:pl,dep:R.dep,tieDep:R.tieDep,tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
 function analyzeMove(q){
  try{
   const an=analyze(q.b,q.mv);if(!an)return;
-  const loss=an.loss,g=gradeOf(loss),bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
-  const e={no:q.no,side:q.side||0,dep:an.dep,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,score:scoreOf(loss),g:g[1],gc:g[2],after:clV(an.played.v),
+  const loss=an.loss,g=(loss<=10&&an.best.m!==Eng.intMove(q.mv))?GR[1]:gradeOf(loss),bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
+  const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,score:scoreOf(loss),g:g[1],gc:g[2],after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
    bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX)};
   rec.push(e);curEv=e;
@@ -555,7 +568,8 @@ function showEvDetail(){
  else{L.push('最善手: '+e.bestT+(e.bwhy.length?'\n　理由: '+e.bwhy.join('・'):'\n　理由: 駒の働きと形のバランスがよい'));
   if(e.loss>GOODMAX)L.push('この手の問題: '+(e.pwhy.some(x=>x.indexOf('取られ')>=0)?e.pwhy.filter(x=>x.indexOf('取られ')>=0).join('・'):(e.reply||'最善手より形勢が下がる')));
   if(e.reply&&e.loss>GOODMAX)L.push(e.reply)}
- L.push('先読み: '+(e.dep||5)+'手先まで（駒の取り合いは決着まで）。形勢は＋が指した側に有利（歩の個数で換算）');
+ if(!e.same&&e.loss<=10)L.push('最善と同じ点数の手が他にもあります（差が付かない静かな手）');
+ L.push('先読み: '+(e.dep||5)+'手先まで'+(e.tie?'（同点の手は'+e.tie+'手先まで）':'')+'（駒の取り合いは決着まで）。形勢は＋が指した側に有利（歩の個数で換算）');
  showPanel(L.join('\n'));
 }
 function showSummary(){

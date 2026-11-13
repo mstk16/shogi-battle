@@ -121,7 +121,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.8";
+const VERSION="0.9.9";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -537,7 +537,7 @@ function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
  let h='';
  if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv;
-  h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><span>形勢 '+fmtAdv(e.bestV)+' → '+fmtAdv(e.after)+'（'+(e.loss>0?'-':'±')+(e.loss/100).toFixed(1)+'）</span><button id="evd">詳細</button>';}
+  h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><button id="evd">詳細</button>';}
  else if(evOn&&curEv&&curEv.unclear&&!curEv.quiet)h+='<span style="color:var(--sub)">この手は評価なし（差が付かない局面）</span>';
  else if(evOn&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
  if(hints.length){h+='<span class="evh">ヒント</span>'+hints.map((x,i)=>'<span class="hch" style="background:'+HC[i]+'"><b>'+'①②③'[i]+'</b> '+x.t+'</span>').join('');}

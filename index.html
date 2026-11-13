@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.12";
+const VERSION="0.9.13";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -452,7 +452,7 @@ function curLV(){
 function adLabel(){const s=adS();return ADN[Math.round(s)]+'相当('+s.toFixed(1)+')'}
 function evalPos(x){const r=Eng.choose(x,{ms:80,maxDepth:4,noise:0,seed:0,side:x.turn});return r&&r.depth>0?r.score:null}
 const KJ='一二三四五六七八九';
-let evOn=true,rec=[],hints=[],hintMv=null,hintCount=0,curEv=null;
+let evBusy=false,evOn=true,rec=[],hints=[],hintMv=null,hintCount=0,curEv=null;
 try{evOn=localStorage.getItem('sb_ev')!=='0'}catch(e){}
 const sqN=(r,c)=>(9-c)+KJ[r];
 const pnm=pc=>pc.p&&PROM[pc.t]?PROM[pc.t]:pc.t;
@@ -524,6 +524,7 @@ function analyze(stB,mv){
  return{rank:rk,nAll:R.all.length,best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
 function analyzeMove(q){
+ evBusy=false;
  try{
   const an=analyze(q.b,q.mv);
   if(!an){const sd0=q.side||0,hb0=hangVal(q.b,sd0),hp0=hangVal(applyMove(q.b,q.mv).n,sd0),hg=(hp0-hb0)>=45;
@@ -552,10 +553,11 @@ function analyzeMove(q){
 function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
  let h='';
- if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv;
+ if(evOn&&evBusy)h+='<span class="evl0">'+(humOne()?'あなたの手':'この手')+'</span><span style="color:var(--sub)">評価中…</span>';
+ else if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv;
   h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><button id="evd">詳細</button>';}
- else if(evOn&&curEv&&curEv.unclear&&!curEv.quiet)h+='<span style="color:var(--sub)">この手は評価なし（差が付かない局面）</span>';
- else if(evOn&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
+ else if(evOn&&!evBusy&&curEv&&curEv.unclear&&!curEv.quiet)h+='<span style="color:var(--sub)">この手は評価なし（差が付かない局面）</span>';
+ else if(evOn&&!evBusy&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
  if(hints.length){h+='<span class="evh">ヒント</span>'+hints.map((x,i)=>'<span class="hch" style="background:'+HC[i]+'"><b>'+'①②③'[i]+'</b> '+x.t+'</span>').join('');}
  box.innerHTML=h;
  const d=document.getElementById('evd');if(d)d.onclick=showEvDetail;
@@ -1501,8 +1503,8 @@ function play(mv){
  if(st.win!==null&&!endReason)endReason=(cap&&cap.t==='王')?'王を取った':'HPが0になった';
  say(t);render();fx(mv,cap,dmg,who,n);
  animMove(mv,who,cap,pre);
- if(isHum(who)){hints=[];hintMv=null;if(st.win===null&&st.sp===false&&st.extra===0&&(evOn||(aiLevel===5&&humOne())))ad.pend={b:stB,a:st,mv:mv,no:hist.length,side:who};else ad.pend=null;renderEv();
-  if(ad.pend&&isHum(st.turn))setTimeout(()=>{if(ad.pend){const q=ad.pend;ad.pend=null;analyzeMove(q)}},80)}
+ if(isHum(who)){hints=[];hintMv=null;if(st.win===null&&st.sp===false&&st.extra===0&&(evOn||(aiLevel===5&&humOne())))ad.pend={b:stB,a:st,mv:mv,no:hist.length,side:who};else ad.pend=null;evBusy=!!(ad.pend&&evOn);renderEv();
+  if(ad.pend)setTimeout(()=>{if(ad.pend){const q=ad.pend;ad.pend=null;analyzeMove(q)}},60)}
  if(st.win!==null){setTimeout(()=>{sfx(humWon()?'win':'lose');flash(humWon()?'winfx':'chk',1800)},520)}else if(gaveCheck){setTimeout(()=>{sfx('chk');buzz([10,40,10])},420);setTimeout(()=>flash('chk',1500),380)}
  if(cap&&book)book.dead=true;save();maybeAI();
 }

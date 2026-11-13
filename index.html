@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.13";
+const VERSION="0.9.14";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -516,17 +516,19 @@ function rankPos(x,extra){
     r2=r2.map(y=>mp.has(y.m)?{m:y.m,v:mp.get(y.m)}:y).sort((a,b)=>b.v-a.v);tieDep=8}}}
  const res={list:r2,all:i0,dep:dep,tieDep:tieDep,key:key};evCache.key=key;evCache.res=res;return res;
 }
-function analyze(stB,mv){
- const R=rankPos(stB,[mv]);if(!R)return null;
+function analyze(stB,mv){return analyzeFrom(rankPos(stB,[mv]),mv)}
+function analyzeFrom(R,mv){
+ if(!R)return null;
  const pi=Eng.intMove(mv),pl=R.list.find(x=>x.m===pi);if(!pl)return null;
  const best=R.list[0];
  const p3=R.all.find(y=>y.m===pi),rk=p3?R.all.filter(y=>y.v>p3.v+1).length+1:0;
  return{rank:rk,nAll:R.all.length,best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
-function analyzeMove(q){
- evBusy=false;
+async function analyzeMove(q){
  try{
-  const an=analyze(q.b,q.mv);
+  const R0=await callRank(q.b,[q.mv]);
+  evBusy=false;
+  const an=analyzeFrom(R0,q.mv);
   if(!an){const sd0=q.side||0,hb0=hangVal(q.b,sd0),hp0=hangVal(applyMove(q.b,q.mv).n,sd0),hg=(hp0-hb0)>=45;
    const e0={no:q.no,side:sd0,dep:0,tie:0,tied:0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:0,mk:'△',g:'疑問手',gc:'g2',unclear:!hg,hang:hg,rk:0,nAll:0,after:0,bestT:'',bestV:0,same:false,bwhy:[],pwhy:whyMove(q.b,q.mv),reply:'',quiet:false};
    rec.push(e0);curEv=e0;renderEv();render();return}
@@ -548,7 +550,7 @@ function analyzeMove(q){
    adSave();const el=document.getElementById('lv');if(el)el.textContent='強さ:'+adLabel();
   }
   renderEv();render();
- }catch(err){}
+ }catch(err){evBusy=false;renderEv()}
 }
 function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
@@ -621,8 +623,9 @@ function doHint(){
  if(st.win!==null||!isHum(st.turn)||aiBusy){say('人が指す番のときに使えます');return}
  if(st.sp!==false){say('特殊ルール中は、ヒントは使えません');return}
  const b=document.getElementById('hintb');b.disabled=true;say('候補を考えています…');
- setTimeout(()=>{try{
-  const R=rankPos(st,[]);if(!R||R.list.length<2){say('候補が1つしかありません');return}
+ setTimeout(async()=>{try{
+  const sx=st;const R=await callRank(sx,[]);if(st!==sx)return;
+  if(!R||R.list.length<2){say('候補が1つしかありません');return}
   const L=R.list;
   let c=L.slice(0,3).filter(x=>clV(L[0].v)-clV(x.v)<=GOODMAX);
   const want=Math.min(c.length,2+((Math.random()*2)|0));c=c.slice(0,want);
@@ -1354,6 +1357,34 @@ let st=newState(),sel=null,handSel=null,face=1,last=null,aiBusy=false,book=newBo
 try{face=+localStorage.getItem('sb_face')||1}catch(e){}
 try{const lv=+localStorage.getItem('sb_lv2');if(lv>=0&&lv<LEVELS.length&&localStorage.getItem('sb_lv2')!==null)aiLevel=lv}catch(e){}
 const $=id=>document.getElementById(id);
+// ===== 重い計算(相手の読み・評価・ヒント)は別スレッド(Web Worker)で行う: 計算中も画面が固まらない =====
+function mkWorker(){
+ try{
+  const shim="self.window=self;self.document={getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{},documentElement:{}};self.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\n";
+  const glue="\n;self.onmessage=function(e){const d=e.data;let out=null;try{"+
+   "if(d.t==='rank'){const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
+   "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy}}"+
+   "}catch(err){out={error:String(err&&err.stack||err)}}postMessage({id:d.id,out:out})};";
+  const src=shim+document.scripts[0].textContent+glue;
+  const w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+  w.pend=new Map();w.seq=0;
+  w.onmessage=e=>{const f=w.pend.get(e.data.id);if(f){w.pend.delete(e.data.id);f(e.data.out)}};
+  w.onerror=e=>{w.dead=true;for(const f of w.pend.values())f({error:'worker'});w.pend.clear()};
+  return w;
+ }catch(e){return null}
+}
+let evW=mkWorker(),cpuW=mkWorker();
+function wcall(w,msg){return new Promise(res=>{if(!w||w.dead){res({error:'noworker'});return}const id=++w.seq;w.pend.set(id,res);msg.id=id;try{w.postMessage(msg)}catch(e){w.pend.delete(id);res({error:'post'})}})}
+async function callRank(x,extra){
+ const o=await wcall(evW,{t:'rank',st:x,extra:extra});
+ if(o&&!o.error)return o;
+ return rankPos(x,extra);
+}
+async function chooseA(x){
+ const o=await wcall(cpuW,{t:'choose',st:x,aiLevel:aiLevel,aiSide:aiSide,planId:aiPlan&&aiPlan.id,aim:aiAim,aiStyle:aiStyle,aiSeed:aiSeed,aiLast:aiLast,ad:{acpl:ad.acpl,n:ad.n,adj:ad.adj,band:ad.band},seen:[...seen]});
+ if(o&&!o.error&&o.move!==undefined){aiWhy=o.why;return o.move}
+ return chooseAI(x,4,seen);
+}
 let hum=[true,false];try{const h=JSON.parse(localStorage.getItem('sb_hum')||'null');if(Array.isArray(h)&&h.length===2)hum=[!!h[0],!!h[1]]}catch(e){}
 const isHum=sd=>!!hum[sd],humOne=()=>hum[0]!==hum[1],humSide=()=>hum[0]?0:1;
 const humWon=()=>humOne()?st.win===humSide():true;
@@ -1511,7 +1542,7 @@ function play(mv){
 function maybeAI(){
  if(st.win!==null||isHum(st.turn)||aiBusy)return;
  aiBusy=true;
- setTimeout(()=>{
+ setTimeout(async()=>{
   if(st.win!==null||isHum(st.turn)){aiBusy=false;return}
   const s=st.turn,P=planStore[s];
   aiSide=s;aiPlan=P.plan;aiAim=P.aim;aiMoves=P.moves;aiLast=P.last;
@@ -1521,7 +1552,7 @@ function maybeAI(){
   aiMoves++;
   if(!m){
    if(st.sp!==false&&s===1&&st.g[1]>=GMAX&&st.extra===0&&genMoves(st,1).some(x=>{const q=st.b[idx(x.to[0],x.to[1])];return q&&q.s===0})){st.g[1]=0;st.extra=1;say('相手が必殺「二連」を発動。続けて2手指す');render();showBanner('相手の必殺「二連」！ 2手続けて指す',1600);pause=1100}
-   m=chooseAI(st,4,seen);
+   {const sx=st;m=await chooseA(sx);if(st!==sx||st.win!==null||isHum(st.turn)){aiBusy=false;return}}
   }
   aiBusy=false;
   P.plan=aiPlan;P.aim=aiAim;P.moves=aiMoves;

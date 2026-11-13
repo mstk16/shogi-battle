@@ -121,7 +121,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.7";
+const VERSION="0.9.8";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -456,7 +456,8 @@ function mvText(x,m,org){
  const pc=x.b[idx(m.f[0],m.f[1])];
  return (pc.s===0?'▲':'△')+sqN(m.to[0],m.to[1])+pnm(pc)+(m.pr?'成':'')+(org?'（'+sqN(m.f[0],m.f[1])+'から）':'');
 }
-function markOf(loss,isBest){if(isBest)return['◎','最善','g0'];if(loss<=GOODMAX)return['〇','良い','g1'];if(loss<=300)return['△','疑問','g2'];return['✖','悪い','g3']}
+function markOf(loss){if(loss<=30)return['◎','ほぼ落ちない','g0'];if(loss<=GOODMAX)return['〇','少し落ちた','g1'];if(loss<=300)return['△','だいぶ落ちた','g2'];return['✖','大きく落ちた','g3']}
+const fmtAdv=v=>{if(v>=9000)return '詰み勝ち';if(v<=-9000)return '詰まされ';const f=Math.max(-99.9,Math.min(99.9,v/100));return (f>=0?'+':'')+f.toFixed(1)};
 const GOODMAX=150;
 const scoreOf=l=>Math.round(100*Math.exp(-l/220));
 const clV=v=>Math.abs(v)>=29000?(v>0?9000:-9000):Math.max(-8000,Math.min(8000,v));
@@ -516,7 +517,7 @@ function analyze(stB,mv){
 function analyzeMove(q){
  try{
   const an=analyze(q.b,q.mv);if(!an)return;
-  const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss,isB),bV=clV(an.best.v),pV=clV(an.played.v);
+  const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss),bV=clV(an.best.v),pV=clV(an.played.v);
   // はっきり言える時だけ評価する: 読みが浅い・どの手も同じ点数・どの手でも詰まされる・詰み同士 は「評価なし」
   const unclear=an.dep<5||(loss<=GOODMAX&&an.spread<=40)||bV<=-9000||(Math.abs(bV)>=9000&&Math.abs(pV)>=9000&&bV*pV>0);
   const bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
@@ -535,8 +536,8 @@ function analyzeMove(q){
 function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
  let h='';
- if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv,f=Math.max(-9.9,Math.min(9.9,e.after/100));
-  h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><span>形勢 '+(f>=0?'+':'')+f.toFixed(1)+'</span><button id="evd">詳細</button>';}
+ if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv;
+  h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><span>形勢 '+fmtAdv(e.bestV)+' → '+fmtAdv(e.after)+'（'+(e.loss>0?'-':'±')+(e.loss/100).toFixed(1)+'）</span><button id="evd">詳細</button>';}
  else if(evOn&&curEv&&curEv.unclear&&!curEv.quiet)h+='<span style="color:var(--sub)">この手は評価なし（差が付かない局面）</span>';
  else if(evOn&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
  if(hints.length){h+='<span class="evh">ヒント</span>'+hints.map((x,i)=>'<span class="hch" style="background:'+HC[i]+'"><b>'+'①②③'[i]+'</b> '+x.t+'</span>').join('');}
@@ -566,14 +567,14 @@ window.addEventListener('resize',()=>drawHints());
 function showPanel(txt){const p=document.getElementById('pnl');document.getElementById('pt').textContent=txt;p.style.display='flex'}
 function showEvDetail(){
  const e=curEv;if(!e)return;
- const L=['第'+e.no+'手 '+e.t+'　'+(e.unclear?'評価なし':e.mk+' '+e.g),'最善手との差: 歩 '+(e.loss/100).toFixed(1)+' 個ぶん'];
+ const L=['第'+e.no+'手 '+e.t+'　'+(e.unclear?'評価なし':e.mk+' '+e.g),'形勢（＋が指した側に有利）: 指す前 '+fmtAdv(e.bestV)+' → 指した後 '+fmtAdv(e.after)+'　下がり幅 歩 '+(e.loss/100).toFixed(1)+' 個ぶん'];
  if(e.unclear)L.push('差が付かない局面（または読み切れない局面）のため、評価は出していません');
- if(e.same)L.push('この手が最善手でした'+(e.bwhy.length?'（'+e.bwhy.join('・')+'）':''));
+ if(e.same)L.push('形勢が下がらない最善手でした'+(e.bwhy.length?'（'+e.bwhy.join('・')+'）':''));
  else{L.push('最善手: '+e.bestT+(e.bwhy.length?'\n　理由: '+e.bwhy.join('・'):'\n　理由: 駒の働きと形のバランスがよい'));
   if(e.loss>GOODMAX)L.push('この手の問題: '+(e.pwhy.some(x=>x.indexOf('取られ')>=0)?e.pwhy.filter(x=>x.indexOf('取られ')>=0).join('・'):(e.reply||'最善手より形勢が下がる')));
   if(e.reply&&e.loss>GOODMAX)L.push(e.reply)}
- if(!e.same&&e.loss<=10)L.push('最善と同じ点数の手が他にもあります（差が付かない静かな手）');
- L.push('先読み: '+(e.dep||5)+'手先まで'+(e.tie?'（同点の手は'+e.tie+'手先まで）':'')+'（駒の取り合いは決着まで）。形勢は＋が指した側に有利（歩の個数で換算）');
+ 
+ L.push('先読み: '+(e.dep||5)+'手先まで'+(e.tie?'（同点の手は'+e.tie+'手先まで）':'')+'（駒の取り合いは決着まで）。形勢は歩の個数で換算');
  showPanel(L.join('\n'));
 }
 function showSummary(){

@@ -60,7 +60,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #pt{font-size:14px;line-height:1.7;white-space:pre-line}
 #pnl .bt{display:flex;margin-top:12px}#pnl .bt button{flex:1;padding:10px}
 .bt2{display:flex;gap:8px;margin-top:10px}.bt2 button{flex:1;padding:10px}
-.evg{padding:2px 8px;border-radius:6px;font-weight:500;font-size:12px}.evg.g0{background:#DCEFD0;color:#27500A}.evg.g1{background:#E6E3DA;color:#2C2C2A}.evg.g2{background:#FAE3B5;color:#412402}.evg.g3{background:#F6CACA;color:#501313}
+.evg{padding:2px 8px;border-radius:6px;font-weight:500;font-size:12px}.evg.g0{background:#DCEFD0;color:#27500A}.evg.g1{background:#E6F1FB;color:#0C447C}.evg.g2{background:#FAE3B5;color:#412402}.evg.g3{background:#F6CACA;color:#501313}
 #cpub{position:relative;height:34px;margin:0;font-size:12px;color:#fff}
 #cpub .bb{position:absolute;left:0;top:2px;max-width:100%;box-sizing:border-box;background:#33302B;border-radius:13px 13px 13px 3px;padding:4px 12px 4px 6px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #cpub .bb::after{content:none}
@@ -121,7 +121,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.6";
+const VERSION="0.9.7";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -456,11 +456,10 @@ function mvText(x,m,org){
  const pc=x.b[idx(m.f[0],m.f[1])];
  return (pc.s===0?'▲':'△')+sqN(m.to[0],m.to[1])+pnm(pc)+(m.pr?'成':'')+(org?'（'+sqN(m.f[0],m.f[1])+'から）':'');
 }
-const GR=[[10,'最善','g0'],[40,'好手','g0'],[150,'普通','g1'],[300,'疑問手','g2'],[600,'悪手','g3'],[1e9,'大悪手','g3']];
+function markOf(loss,isBest){if(isBest)return['◎','最善','g0'];if(loss<=GOODMAX)return['〇','良い','g1'];if(loss<=300)return['△','疑問','g2'];return['✖','悪い','g3']}
 const GOODMAX=150;
-const gradeOf=l=>GR.find(g=>l<=g[0]);
 const scoreOf=l=>Math.round(100*Math.exp(-l/220));
-const clV=v=>Math.max(-1500,Math.min(1500,v));
+const clV=v=>Math.abs(v)>=29000?(v>0?9000:-9000):Math.max(-8000,Math.min(8000,v));
 function matchLegal(x,o,side){return legalMoves(x,side).find(m=>o.d?(m.d===o.d&&m.to[0]===o.to[0]&&m.to[1]===o.to[1]):(!m.d&&m.f[0]===o.f[0]&&m.f[1]===o.f[1]&&m.to[0]===o.to[0]&&m.to[1]===o.to[1]&&!!m.pr===!!o.pr))}
 function hangVal(x,s){const at=attackMap(x,1-s),df=attackMap(x,s);let v=0;
  for(let k=0;k<81;k++){const pc=x.b[k];if(pc&&pc.s===s&&pc.t!=='王'&&at.cnt[k]>0&&df.cnt[k]===0)v+=(VAL[pc.t]||0)}return v}
@@ -512,17 +511,20 @@ function analyze(stB,mv){
  const R=rankPos(stB,[mv]);if(!R)return null;
  const pi=Eng.intMove(mv),pl=R.list.find(x=>x.m===pi);if(!pl)return null;
  const best=R.list[0];
- return{best:best,played:pl,dep:R.dep,tieDep:R.tieDep,tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
+ return{best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
 function analyzeMove(q){
  try{
   const an=analyze(q.b,q.mv);if(!an)return;
-  const loss=an.loss,g=(loss<=10&&an.best.m!==Eng.intMove(q.mv))?GR[1]:gradeOf(loss),bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
-  const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,score:scoreOf(loss),g:g[1],gc:g[2],after:clV(an.played.v),
+  const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss,isB),bV=clV(an.best.v),pV=clV(an.played.v);
+  // はっきり言える時だけ評価する: 読みが浅い・どの手も同じ点数・どの手でも詰まされる・詰み同士 は「評価なし」
+  const unclear=an.dep<5||(loss<=GOODMAX&&an.spread<=40)||bV<=-9000||(Math.abs(bV)>=9000&&Math.abs(pV)>=9000&&bV*pV>0);
+  const bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
+  const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g[0],g:g[1],gc:g[2],unclear:unclear,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
    bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX)};
   rec.push(e);curEv=e;
-  if(aiLevel===5&&humOne()&&hist.length>=4){
+  if(aiLevel===5&&humOne()&&hist.length>=4&&!unclear){
    const w=Math.max(0.08,1/(ad.n+1));ad.acpl+=(Math.min(600,loss)-ad.acpl)*w;ad.n++;ad.samples++;
    const af=e.after;if(af>500)ad.band=Math.min(.8,ad.band+.2);else if(af<-500)ad.band=Math.max(-.8,ad.band-.2);else ad.band*=.85;
    adSave();const el=document.getElementById('lv');if(el)el.textContent='強さ:'+adLabel();
@@ -533,8 +535,9 @@ function analyzeMove(q){
 function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
  let h='';
- if(evOn&&curEv&&!curEv.quiet){const e=curEv,f=(e.after/100);
-  h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.g+'</span><b>'+e.score+'点</b><span>形勢 '+(f>=0?'+':'')+f.toFixed(1)+'</span><button id="evd">詳細</button>';}
+ if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv,f=Math.max(-9.9,Math.min(9.9,e.after/100));
+  h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><span>形勢 '+(f>=0?'+':'')+f.toFixed(1)+'</span><button id="evd">詳細</button>';}
+ else if(evOn&&curEv&&curEv.unclear&&!curEv.quiet)h+='<span style="color:var(--sub)">この手は評価なし（差が付かない局面）</span>';
  else if(evOn&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
  if(hints.length){h+='<span class="evh">ヒント</span>'+hints.map((x,i)=>'<span class="hch" style="background:'+HC[i]+'"><b>'+'①②③'[i]+'</b> '+x.t+'</span>').join('');}
  box.innerHTML=h;
@@ -563,7 +566,8 @@ window.addEventListener('resize',()=>drawHints());
 function showPanel(txt){const p=document.getElementById('pnl');document.getElementById('pt').textContent=txt;p.style.display='flex'}
 function showEvDetail(){
  const e=curEv;if(!e)return;
- const L=['第'+e.no+'手 '+e.t+'　'+e.score+'点【'+e.g+'】','最善手との差: 歩 '+(e.loss/100).toFixed(1)+' 個ぶん'];
+ const L=['第'+e.no+'手 '+e.t+'　'+(e.unclear?'評価なし':e.mk+' '+e.g),'最善手との差: 歩 '+(e.loss/100).toFixed(1)+' 個ぶん'];
+ if(e.unclear)L.push('差が付かない局面（または読み切れない局面）のため、評価は出していません');
  if(e.same)L.push('この手が最善手でした'+(e.bwhy.length?'（'+e.bwhy.join('・')+'）':''));
  else{L.push('最善手: '+e.bestT+(e.bwhy.length?'\n　理由: '+e.bwhy.join('・'):'\n　理由: 駒の働きと形のバランスがよい'));
   if(e.loss>GOODMAX)L.push('この手の問題: '+(e.pwhy.some(x=>x.indexOf('取られ')>=0)?e.pwhy.filter(x=>x.indexOf('取られ')>=0).join('・'):(e.reply||'最善手より形勢が下がる')));
@@ -574,11 +578,11 @@ function showEvDetail(){
 }
 function showSummary(){
  const v=rec.filter(x=>x);if(!v.length){showPanel('評価データがありません。\n評価がオフだったか、対局が短すぎました。');return}
- const avg=Math.round(v.reduce((a,x)=>a+x.score,0)/v.length),gl=v.reduce((a,x)=>a+Math.min(600,x.loss),0)/v.length;
- const cnt={};for(const x of v)cnt[x.g]=(cnt[x.g]||0)+1;
- const worst=[...v].sort((a,b)=>b.loss-a.loss).slice(0,3).filter(x=>x.loss>GOODMAX);
+ const rated=v.filter(x=>!x.unclear),unr=v.length-rated.length,gl=rated.length?rated.reduce((a,x)=>a+Math.min(600,x.loss),0)/rated.length:200;
+ const cnt={};for(const x of rated)cnt[x.mk]=(cnt[x.mk]||0)+1;
+ const worst=[...rated].sort((a,b)=>b.loss-a.loss).slice(0,3).filter(x=>x.loss>GOODMAX);
  const lv=ADN[Math.round(Math.max(0,Math.min(4,(260-gl)/60)))];
- const L=['総合評価　平均 '+avg+'点（'+v.length+'手）','最善 '+(cnt['最善']||0)+' / 好手 '+(cnt['好手']||0)+' / 普通 '+(cnt['普通']||0)+' / 疑問手 '+(cnt['疑問手']||0)+' / 悪手 '+((cnt['悪手']||0)+(cnt['大悪手']||0)),(v.length>=10?'この対局の実力の目安: '+lv+'相当':'手数が少ないので、実力の目安はまだ出せません')];
+ const L=['総合評価（'+rated.length+'手を評価・'+unr+'手は評価なし）','◎ '+(cnt['◎']||0)+'　〇 '+(cnt['〇']||0)+'　△ '+(cnt['△']||0)+'　✖ '+(cnt['✖']||0),(rated.length>=10?'この対局の実力の目安: '+lv+'相当':'評価できた手が少ないので、実力の目安はまだ出せません')];
  if(worst.length){L.push('痛かった手');worst.forEach(x=>L.push('　第'+x.no+'手 '+x.t+'（最善は '+x.bestT+'）'))}
  if(hintCount)L.push('ヒントを使った回数: '+hintCount);
  showPanel(L.join('\n'));
@@ -1355,8 +1359,8 @@ function render(){
   if(sel&&sel[0]===r&&sel[1]===c)cl+=' sel';
   else if(dst[k]){if(pc){cl+=' cap';ex=st.sp!==false?'<span class="d">-'+dmgOf(st,0,pc)+'</span>':''}else cl+=' dst'}
   if(last&&last[0]===r&&last[1]===c)cl+=' last';
-  if(evOn&&curEv&&!curEv.quiet&&curEv.to&&curEv.no===hist.length&&curEv.to[0]===r&&curEv.to[1]===c){
-   ex+='<span class="evbd evg '+curEv.gc+(curEv.fresh?' new':'')+(c<2?' lf':(c>6?' rt':''))+'">'+curEv.g+' '+curEv.score+'</span>';curEv.fresh=false}
+  if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear&&curEv.to&&curEv.no===hist.length&&curEv.to[0]===r&&curEv.to[1]===c){
+   ex+='<span class="evbd evg '+curEv.gc+(curEv.fresh?' new':'')+(c<2?' lf':(c>6?' rt':''))+'">'+curEv.mk+curEv.g+'</span>';curEv.fresh=false}
   h+='<div class="'+cl+'" data-r="'+r+'" data-c="'+c+'">'+(pc?pieceHTML(pc):'')+ex+'</div>';
  }
  $('bd').innerHTML=h;

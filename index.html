@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.14";
+const VERSION="0.9.16";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1246,7 +1246,12 @@ const CASTLES={
  '矢倉':[[8,8,'王'],[7,8,'金'],[6,7,'金'],[7,7,'銀']],
  '穴熊':[[9,8,'香'],[9,9,'王'],[8,8,'銀'],[8,9,'桂'],[7,8,'金']],
  '左美濃':[[8,8,'王'],[7,8,'銀'],[6,9,'金'],[5,8,'金']],
- '嬉野流型':[[5,9,'王'],[6,8,'銀'],[7,9,'角'],[7,8,'金'],[4,8,'銀']]
+ '嬉野流型':[[5,9,'王'],[6,8,'銀'],[7,9,'角'],[7,8,'金'],[4,8,'銀']],
+ '高美濃':[[2,8,'王'],[3,8,'銀'],[4,7,'金'],[4,9,'金'],[3,7,'桂']],
+ '銀冠':[[2,8,'王'],[2,7,'銀'],[3,8,'金'],[4,7,'金']],
+ '藤井型':[[5,9,'王'],[4,9,'金'],[6,9,'金'],[3,8,'銀']],
+ '雁木':[[6,9,'王'],[7,8,'金'],[5,8,'金'],[6,7,'銀'],[5,7,'銀']],
+ '鬼殺し型':[[6,5,'桂'],[7,5,'歩']]
 };
 const AIMS={
  '棒銀':[[2,5,'歩'],[2,6,'銀']],
@@ -1254,7 +1259,8 @@ const AIMS={
  '端攻め':[[9,5,'歩'],[1,5,'歩']],
  '位取り':[[5,5,'歩']],
  '飛車の筋':[[6,6,'歩']],
- '石田流':[[7,5,'歩'],[7,6,'飛']]
+ '石田流':[[7,5,'歩'],[7,6,'飛']],
+ '藤井システム':[[1,5,'歩'],[2,5,'桂'],[4,5,'歩']]
 };
 // kind: 居=居飛車 / 振=振り飛車。w=[相手が居飛車, 相手が振り飛車, まだ不明] の相性（0〜1・0.5未満は選ばない）
 const PLANS=[
@@ -1271,6 +1277,12 @@ const PLANS=[
  ,{id:'hidari',att:'居飛車',cas:'左美濃',name:'居飛車・左美濃',kind:'居',castle:'左美濃',rook:null,aims:['飛車先','端攻め'],w:[0.7,0.6,0.65,0.65]}
  ,{id:'bogy',att:'棒銀',cas:'矢倉',name:'棒銀・矢倉',kind:'居',castle:'矢倉',rook:null,aims:['棒銀'],w:[0.7,0.5,0.65,0.7]}
  ,{id:'bogh',att:'棒銀',cas:'左美濃',name:'棒銀・左美濃',kind:'居',castle:'左美濃',rook:null,aims:['棒銀'],w:[0.6,0.55,0.6,0.6]}
+ ,{id:'takami',att:'四間飛車',cas:'高美濃',name:'四間飛車・高美濃',kind:'振',castle:'高美濃',rook:[6,8],aims:['飛車の筋','位取り'],w:[0.7,0.6,0.65,0.65]}
+ ,{id:'ginkan',att:'四間飛車',cas:'銀冠',name:'四間飛車・銀冠',kind:'振',castle:'銀冠',rook:[6,8],aims:['飛車の筋'],w:[0.65,0.55,0.6,0.6]}
+ ,{id:'fujii',att:'藤井システム',cas:'藤井型',hiddenCas:true,name:'藤井システム',kind:'振',castle:'藤井型',rook:[6,8],aims:['藤井システム'],w:[0.9,0.5,0.7,0.7]}
+ ,{id:'gokigen',att:'ゴキゲン中飛車',cas:'美濃',name:'ゴキゲン中飛車・美濃囲い',kind:'振',castle:'美濃(中飛車用)',rook:[5,8],aims:['位取り'],w:[0.7,0.6,0.65,0.6]}
+ ,{id:'ganki',att:'居飛車',cas:'雁木',name:'居飛車・雁木',kind:'居',castle:'雁木',rook:null,aims:['飛車先','端攻め'],w:[0.75,0.5,0.65,0.7]}
+ ,{id:'onigoroshi',att:'鬼殺し',cas:'鬼殺し型',hiddenCas:true,name:'鬼殺し（奇襲）',kind:'振',castle:'鬼殺し型',rook:[7,8],aims:[],w:[0.35,0.35,0.35,0.35]}
  ,{id:'ureshino',att:'嬉野流',cas:'嬉野流型',hiddenCas:true,name:'嬉野流',kind:'居',castle:'嬉野流型',rook:null,aims:['棒銀'],w:[0.7,0.7,0.7,0.7]}
 ];
 let aiPlan=null,aiAim=null,aiSide=1,aiLast=null,aiWhy='';
@@ -1596,7 +1608,7 @@ function doRestart(sp,first){planStore=newStore();rec=[];hints=[];hintMv=null;hi
 let spChoice=false,lvChoice=2,firstChoice=0,setupCancel=false;
 try{const f=localStorage.getItem('sb_first');if(f==='1'||f==='2')firstChoice=+f}catch(e){}
 try{if(localStorage.getItem('sb_sp')==='1')spChoice=true}catch(e){}
-const PL_ATT=['居飛車','棒銀','嬉野流','四間飛車','三間飛車','中飛車','向かい飛車'],PL_CAS=['美濃','穴熊','矢倉','左美濃'];
+const PL_ATT=['居飛車','棒銀','嬉野流','四間飛車','三間飛車','中飛車','向かい飛車','藤井システム','ゴキゲン中飛車','鬼殺し'],PL_CAS=['美濃','高美濃','銀冠','穴熊','矢倉','左美濃','雁木'];
 let pickA=new Set(),pickC=new Set();
 function plCount(){return PLANS.filter(x=>planOKf(x,pickA.size?pickA:null,pickC.size?pickC:null)).length}
 function drawPlanUI(){

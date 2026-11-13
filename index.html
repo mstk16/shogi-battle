@@ -54,6 +54,12 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #pnl .bt{display:flex;margin-top:12px}#pnl .bt button{flex:1;padding:10px}
 .bt2{display:flex;gap:8px;margin-top:10px}.bt2 button{flex:1;padding:10px}
 .evg{padding:2px 8px;border-radius:6px;font-weight:500;font-size:12px}.evg.g0{background:#DCEFD0;color:#27500A}.evg.g1{background:#E6E3DA;color:#2C2C2A}.evg.g2{background:#FAE3B5;color:#412402}.evg.g3{background:#F6CACA;color:#501313}
+#cpub{min-height:26px;margin:3px 0 7px;font-size:12px;color:#fff;visibility:hidden}
+#cpub.on{visibility:visible}
+#cpub.on{display:inline-block;position:relative;background:#33302B;border-radius:13px 13px 13px 3px;padding:4px 12px 4px 6px;line-height:18px}
+#cpub.on::after{content:'';position:absolute;left:14px;bottom:-6px;border:6px solid transparent;border-top-color:#33302B;border-bottom:0}
+.cpl{display:inline-block;background:#fff;color:#33302B;border-radius:9px;padding:0 7px;margin-right:7px;font-weight:500;font-size:11px}
+.evl0{color:var(--sub);margin-right:2px}
 #bd .c{overflow:visible}.evbd{position:absolute;left:50%;top:-8px;transform:translateX(-50%);z-index:6;white-space:nowrap;font-size:11px;padding:1px 6px;border:1px solid rgba(0,0,0,.3);box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:pointer}
 .evbd.lf{left:0;transform:none}.evbd.rt{left:auto;right:0;transform:none}
 .evbd.new{animation:evpop .35s ease-out}@keyframes evpop{from{opacity:0;margin-top:6px}to{opacity:1;margin-top:0}}
@@ -77,6 +83,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <button id="snd" aria-label="効果音">♪</button><button id="fm">駒のみ</button><button id="fc">攻撃力</button><button id="upd">更新確認</button></div>
 <div id="top" style="margin-top:8px"></div>
 <div class="hand tray" id="eh"></div>
+<div id="cpub"></div>
 <div id="bw" style="position:relative"><div id="bd"></div>
 <div id="dlg"><div class="bx"><div id="dm" style="font-size:15px;line-height:1.5"></div><div class="bt"><button id="dn"></button><button id="dy"></button></div></div></div>
 <div id="over"><div class="bx"><div id="ovt" style="font-size:20px;font-weight:500"></div><div id="ovr" style="font-size:13px;color:var(--sub);margin-top:4px"></div><div class="bt2"><button id="sumbtn">総合評価</button><button id="rs">もう一局</button></div></div></div>
@@ -94,7 +101,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.8.2";
+const VERSION="0.8.3";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -484,7 +491,7 @@ function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
  let h='';
  if(evOn&&curEv&&!curEv.quiet){const e=curEv,f=(e.after/100);
-  h+='<span class="evg '+e.gc+'">'+e.g+'</span><b>'+e.score+'点</b><span>形勢 '+(f>=0?'+':'')+f.toFixed(1)+'</span><button id="evd">詳細</button>';}
+  h+='<span class="evl0">あなたの手</span><span class="evg '+e.gc+'">'+e.g+'</span><b>'+e.score+'点</b><span>形勢 '+(f>=0?'+':'')+f.toFixed(1)+'</span><button id="evd">詳細</button>';}
  else if(evOn&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
  if(hints.length){h+='<span class="evh">ヒント</span>'+hints.map((x,i)=>'<span class="hch" style="background:'+HC[i]+'"><b>'+'①②③'[i]+'</b> '+x.t+'</span>').join('');}
  box.innerHTML=h;box.style.display=h?'flex':'none';
@@ -1362,6 +1369,7 @@ function ghost(who,pre){
  const an=g.animate([{transform:'none',opacity:1},{transform:'translate('+tx*.12+'px,'+(ty*.12-12)+'px) scale(1.08) rotate(-5deg)',opacity:1,offset:.22},{transform:'translate('+tx+'px,'+ty+'px) scale(.6) rotate(8deg)',opacity:.15}],{duration:430,easing:'ease-in'});
  an.onfinish=()=>{g.remove();sfx('tray');tr.animate([{transform:'scale(1)'},{transform:'scale(1.035)'},{transform:'none'}],{duration:200})};
 }
+function setCpu(txt){const e=document.getElementById('cpub');if(!e)return;e.innerHTML=txt?'<span class="cpl">相手の狙い</span>'+txt:'';e.classList.toggle('on',!!txt)}
 function play(mv){
  const pre=preMove(mv);const stB=st;
  if(st.turn===0){hist.push(snapshot());if(hist.length>60)hist.shift()}
@@ -1371,7 +1379,7 @@ function play(mv){
  st=n;last=mv.to;sel=null;handSel=null;{const k=posKey(st);seen.set(k,(seen.get(k)||0)+1)}
  let t=(who===0?'あなた：':'相手：')+tag+nm;let gaveCheck=false;
  if(cap)t+='　'+cap.t+'を取った'+(n.sp!==false?' -'+dmg:'')+(n.cb[who]>0?'　'+(n.cb[who]+1)+'コンボ':'');
- if(who===1&&pendingWhy){t+='　〔狙い: '+pendingWhy+'〕';pendingWhy=''}
+ if(who===1&&pendingWhy){setCpu(pendingWhy);pendingWhy=''}else if(who===0)setCpu('')
  if(st.win===null&&st.extra===0){const lm=legalMoves(st,st.turn);if(!lm.length){st.win=1-st.turn;endReason='詰み';t+='　詰み'}else if(inCheck(st,st.turn)){t+='　王手！';gaveCheck=true}}
  if(st.win!==null&&!endReason)endReason=(cap&&cap.t==='王')?'王を取った':'HPが0になった';
  say(t);render();fx(mv,cap,dmg,who,n);

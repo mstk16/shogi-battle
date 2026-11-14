@@ -98,6 +98,15 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #dlg .bx{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(320px,86vw)}
 #dlg .bt{display:flex;gap:8px;margin-top:14px}#dlg .bt button{flex:1;padding:10px 6px}
 #dlg #dy{background:#185FA5;color:#fff;border-color:#185FA5}
+/* ボタン: 木の駒の世界観(明るい木色・濃い縁・下に厚み)。主役のボタンは深い赤で目立たせる */
+#ctl button,#hd button,#hum button,.seg button,#dlg button,#over button,#pnl button,#ovshow,#gostart{
+ background:linear-gradient(#FFEFC4,#F0C877);color:#2A1805;border:2px solid #5A3A0E;border-radius:8px;font-weight:700;
+ box-shadow:0 3px 0 #8A5A1A,0 4px 6px rgba(0,0,0,.3);transition:transform .06s,box-shadow .06s}
+#ctl button:active,#hd button:active,#hum button:active,.seg button:active,#dlg button:active,#over button:active,#pnl button:active,#ovshow:active,#gostart:active{
+ transform:translateY(2px);box-shadow:0 1px 0 #8A5A1A,0 1px 2px rgba(0,0,0,.3)}
+#hum button.on,.seg button.on{background:linear-gradient(#7A4A12,#5A3A0E);color:#FFF4D6;border-color:#2A1704;box-shadow:inset 0 2px 4px rgba(0,0,0,.5)}
+#newg,#gostart,#over #rs,#dlg #dy{background:linear-gradient(#C42B1C,#8F1A10)!important;color:#FFF4D6!important;border:2px solid #4A0D07!important;box-shadow:0 3px 0 #5E100A,0 4px 6px rgba(0,0,0,.4)!important;font-size:1.08em}
+#newg:active,#gostart:active,#over #rs:active,#dlg #dy:active{transform:translateY(2px);box-shadow:0 1px 0 #5E100A!important}
 /* 横長の内画面(幅640px以上・横長): 左=盤を画面の高さいっぱいに大きく／右=持ち駒・状態・ボタン(将棋ウォーズ式に盤を最優先) */
 @media(min-width:640px) and (min-aspect-ratio:6/5){
  :root{--bsz:min(calc(100vh - 16px),calc(100vw - 226px))}
@@ -157,7 +166,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.36";
+const VERSION="0.9.37";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};

@@ -168,7 +168,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.44";
+const VERSION="0.9.45";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1516,7 +1516,7 @@ async function callRank(x,extra){
  if(o&&!o.error)return o;
  return rankPos(x,extra);
 }
-let cpuScore=null,cpuHopeless=false,lostCnt=0;
+let cpuScore=null,cpuHopeless=false,lostCnt=0,noResign=false;
 async function chooseA(x){
  const o=await wcall(cpuW,{t:'choose',st:x,aiLevel:aiLevel,aiSide:aiSide,planId:aiPlan&&aiPlan.id,castle:aiPlan&&aiPlan.castle,aim:aiAim,aiStyle:aiStyle,aiSeed:aiSeed,aiLast:aiLast,ad:{acpl:ad.acpl,n:ad.n,adj:ad.adj,band:ad.band},seen:[...seen]});
  if(o&&!o.error&&o.move!==undefined){aiWhy=o.why;cpuScore=o.score;cpuHopeless=!!o.hopeless;return o.move}
@@ -1588,7 +1588,7 @@ function render(){
  $('fm').style.display=$('fc').style.display=st.sp===false?'none':'';$('fm').style.fontWeight=face===1?600:400;$('fc').style.fontWeight=face===2?600:400;
  $('ver').textContent='v'+VERSION+(st.sp===false?'':' ・特殊ルール');$('lv').textContent='強さ:'+(aiLevel===5?adLabel():LEVELS[aiLevel].n);
  drawHints();drawLast();
- if(st.win!==null){const hw=humOne()?(st.win===humSide()?0:1):null;recStat(hw);adFinish(hw);$('ovt').textContent=humOne()?(st.win===humSide()?'あなたの勝ち':'相手の勝ち'):(st.win===0?'下▲の勝ち':'上△の勝ち');$('ovr').textContent=endReason;$('ovcont').style.display=/持ち時間切れ/.test(endReason)?'':'none';$('over').style.display=ovHidden?'none':'flex';$('ovshow').style.display=ovHidden?'block':'none'}else{ovHidden=false;$('over').style.display='none';$('ovshow').style.display='none'}
+ if(st.win!==null){const hw=humOne()?(st.win===humSide()?0:1):null;recStat(hw);adFinish(hw);$('ovt').textContent=humOne()?(st.win===humSide()?'あなたの勝ち':'相手の勝ち'):(st.win===0?'下▲の勝ち':'上△の勝ち');$('ovr').textContent=endReason;$('ovcont').style.display=/持ち時間切れ|投了/.test(endReason)?'':'none';$('over').style.display=ovHidden?'none':'flex';$('ovshow').style.display=ovHidden?'block':'none'}else{ovHidden=false;$('over').style.display='none';$('ovshow').style.display='none'}
 }
 function fx(mv,cap,dmg,who,n){
  const cell=document.querySelector('.c[data-r="'+mv.to[0]+'"][data-c="'+mv.to[1]+'"]');
@@ -1720,7 +1720,7 @@ function maybeAI(){
   }
   aiBusy=false;
   // 投了するのは「3手以内の詰みが避けられない」と分かった時だけ(それまでは形勢が悪くても粘る)。人対CPU・特殊ルールなしのときだけ
-  if(m&&st.sp===false&&humOne()&&aiMoves>=14&&cpuHopeless){st.win=1-s;endReason='相手が投了（3手以内の詰みが避けられない）';ovHidden=false;say('相手が投了した');render();save();return}
+  if(m&&st.sp===false&&humOne()&&aiMoves>=14&&cpuHopeless&&!noResign){st.win=1-s;endReason='相手が投了（3手以内の詰みが避けられない）';ovHidden=false;say('相手が投了した');render();save();return}
   P.plan=aiPlan;P.aim=aiAim;P.moves=aiMoves;
   if(!m){st.win=1-s;endReason='指せる手がない（詰み）';render();return}
   pendingWhy=aiWhy;aiLast=m.d?null:{f:m.f,to:m.to};P.last=aiLast;
@@ -1775,7 +1775,7 @@ $('fm').onclick=()=>setFace(1);$('fc').onclick=()=>setFace(2);
 $('over').onclick=e=>{if(e.target===$('over')){ovHidden=true;render()}};
 $('ovshow').onclick=()=>{ovHidden=false;render()};
 // 切れ負けで勝敗がついても、勉強のためにそのまま続けられる(時計は止める)
-$('ovcont').onclick=()=>{clk={limit:0,t:[0,0],last:Date.now()};st.win=null;endReason='';ovHidden=false;say('時間切れの勝敗はつけたまま、練習として続けます（時計は止めました）');render();save();if(!isHum(st.turn))maybeAI()};
+$('ovcont').onclick=()=>{clk={limit:0,t:[0,0],last:Date.now()};noResign=true;st.win=null;endReason='';ovHidden=false;say('勝敗はつけたまま、練習として続けます（時計は止め、CPUは投了しません）');render();save();if(!isHum(st.turn))maybeAI()};
 // ===== 持ち時間(切れ負け): 自分の番の間だけ減り、0になったら負け。CPUの番も実時間で減る(1手の読みは数秒以内) =====
 let clkChoice=0,clk={limit:0,t:[0,0],last:0};
 try{const v=+localStorage.getItem('sb_clk');if([0,60,120,180,300,600].includes(v))clkChoice=v}catch(e){}
@@ -1803,7 +1803,7 @@ function clkTick(){
  clkDraw();
 }
 setInterval(clkTick,200);
-function doRestart(sp,first){clkInit();planStore=newStore();rec=[];hints=[];hintMv=null;hintCount=0;curEv=null;renderEv();ad.gid++;ad.band=0;ad.pend=null;ad.samples=0;endReason='';ovHidden=false;book=newBook();newStyle();aiPlan=null;aiMoves=0;seen=new Map();hist=[];exMark=0;st=newState(sp);st.turn=first===1?1:0;sel=handSel=last=null;lastFrom=null;lastCpu=false;say(oppChoice===1?'二人で対局。下▲・上△どちらもタップで指せます':oppChoice===2?'CPU同士の対局です。下のスイッチで、途中から人に切り替えられます':(first===1?'あなたは後手。相手が先に指す':(first===0?'あなたは先手':'')));render();save();if(!isHum(st.turn))maybeAI()}
+function doRestart(sp,first){clkInit();noResign=false;planStore=newStore();rec=[];hints=[];hintMv=null;hintCount=0;curEv=null;renderEv();ad.gid++;ad.band=0;ad.pend=null;ad.samples=0;endReason='';ovHidden=false;book=newBook();newStyle();aiPlan=null;aiMoves=0;seen=new Map();hist=[];exMark=0;st=newState(sp);st.turn=first===1?1:0;sel=handSel=last=null;lastFrom=null;lastCpu=false;say(oppChoice===1?'二人で対局。下▲・上△どちらもタップで指せます':oppChoice===2?'CPU同士の対局です。下のスイッチで、途中から人に切り替えられます':(first===1?'あなたは後手。相手が先に指す':(first===0?'あなたは先手':'')));render();save();if(!isHum(st.turn))maybeAI()}
 let spChoice=false,lvChoice=2,firstChoice=0,setupCancel=false;
 try{const f=localStorage.getItem('sb_first');if(f==='1'||f==='2')firstChoice=+f}catch(e){}
 try{if(localStorage.getItem('sb_sp')==='1')spChoice=true}catch(e){}

@@ -182,7 +182,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.51";
+const VERSION="0.9.52";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1554,7 +1554,7 @@ function bookPick(st,bk){
 }
 </script>
 <script>
-let st=newState(),sel=null,handSel=null,face=1,last=null,aiBusy=false,book=newBook(),seen=new Map(),aiMoves=0,ovHidden=false,endReason='',fxBusy=false,fxDone=false,fxPreview=false,fxTimers=[],fxPickW='rand',fxPickL='rand';newStyle();
+let st=newState(),sel=null,handSel=null,face=1,last=null,aiBusy=false,book=newBook(),seen=new Map(),aiMoves=0,ovHidden=false,endReason='',fxBusy=false,fxDone=false,fxPreview=false,fxTimers=[],fxPickW='rand',fxPickL='rand',fxVoiceOn=true;newStyle();
 try{face=+localStorage.getItem('sb_face')||1}catch(e){}
 try{const lv=+localStorage.getItem('sb_lv2');if(lv>=0&&lv<LEVELS.length&&localStorage.getItem('sb_lv2')!==null)aiLevel=lv}catch(e){}
 const $=id=>document.getElementById(id);
@@ -1729,6 +1729,19 @@ function say(t){$('msg').textContent=t}
 const FXW=[['w1','金の紙吹雪'],['w2','桜吹雪'],['w3','花火'],['w4','墨の一文字＋朱印'],['w5','金の光芒'],['w6','幕開け']];
 const FXL=[['l1','暗転して揺れる'],['l2','色が抜ける'],['l3','ひび割れ'],['l4','雨'],['l5','墨がにじむ'],['l6','駒が崩れ落ちる']];
 try{const a=localStorage.getItem('sb_fx_w'),b=localStorage.getItem('sb_fx_l');if(a==='rand'||a==='none'||FXW.some(x=>x[0]===a))fxPickW=a;if(b==='rand'||b==='none'||FXL.some(x=>x[0]===b))fxPickL=b}catch(e){}
+try{if(localStorage.getItem('sb_voice')==='0')fxVoiceOn=false}catch(e){}
+const FXV={lose:['お前の負けだ','勝負あったな','出直してこい','まだまだ甘いな'],win:['まいった…','やるじゃないか','見事だ','次は負けないぞ']};
+const fxVoiceOK=()=>'speechSynthesis' in window&&typeof SpeechSynthesisUtterance!=='undefined';
+function fxSpeak(t){
+ if(!fxVoiceOn||muted||!fxVoiceOK()||vol.alert<=0.005)return;
+ try{const sy=window.speechSynthesis;sy.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='ja-JP';const v=sy.getVoices().find(x=>/^ja/i.test(x.lang));if(v)u.voice=v;u.pitch=.6;u.rate=.9;u.volume=Math.min(1,vol.alert);sy.speak(u)}catch(e){}
+}
+function fxLine(win,reason){
+ if(!humOne())return '';
+ if(win&&/相手が投了/.test(reason))return 'まいった…';
+ if(!win&&/あなた.*投了/.test(reason))return '勝負あったな';
+ const L=win?FXV.win:FXV.lose;return L[Math.floor(Math.random()*L.length)];
+}
 const fxR=(a,b)=>a+Math.random()*(b-a);
 function fxI(fx,css,html){const e=document.createElement('i');e.style.cssText=css;if(html)e.innerHTML=html;fx.appendChild(e);return e}
 const fxRaf2=f=>requestAnimationFrame(()=>requestAnimationFrame(f));
@@ -1751,12 +1764,13 @@ function fxStopTimers(){fxTimers.forEach(t=>{clearTimeout(t);clearInterval(t)});
 function endFxStart(){
  const hw=humOne()?(st.win===humSide()):true;
  let id=fxPick(hw);
+ const line=fxLine(hw,endReason);
  if(humOne()&&!hw&&/あなた.*投了/.test(endReason)&&id)id='l2';
- if(!id)return;
+ if(!id){if(line)fxTimers.push(setTimeout(()=>fxSpeak(line),600));return}
  const first=/投了/.test(endReason)?(/相手/.test(endReason)?'相手が投了':'投了'):/持ち時間切れ/.test(endReason)?'時間切れ':/詰み/.test(endReason)?'詰み':'決着';
- fxRun(id,first,false);
+ fxRun(id,first,false,line);
 }
-function fxRun(id,first,preview){
+function fxRun(id,first,preview,line){
  fxStopTimers();
  const bw=$('bw'),W=bw.clientWidth||300,H=bw.clientHeight||300,K=W/260,d=FXDEF[id];if(!d)return;
  let e=$('efx');if(!e){e=document.createElement('div');e.id='efx';bw.appendChild(e)}
@@ -1769,6 +1783,7 @@ function fxRun(id,first,preview){
  cap.style.opacity=1;cap.textContent=first;cap.style.color='#C8321E';cap.style.fontSize=32*K+'px';
  T(()=>{cap.style.opacity=0},900);
  T(()=>{cap.textContent=d.cap[0];cap.style.color=d.cap[1];cap.style.fontSize=d.cap[2]*K+'px';cap.style.textShadow=d.sh||'';cap.style.opacity=1;dim.style.background=d.dim;d.fx(fx,K);sfx('fx_'+id)},1500);
+ if(line)T(()=>fxSpeak(line),1900);
  T(()=>fxEnd(),4200);
 }
 function fxEnd(){
@@ -1897,11 +1912,12 @@ function openVol(){
   h+='<input type="range" min="0" max="100" step="5" value="'+Math.round(vol[k]*100)+'" data-k="'+k+'" class="vsl" style="width:100%"></div>'}
   h+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line)"><div style="margin-bottom:4px">駒の文字</div><select id="kfsel" style="width:100%;padding:6px;font-size:14px">'+Object.keys(KFONTS).map(k=>'<option value="'+k+'"'+(k===komaFont?' selected':'')+'>'+KFONTS[k][0]+'</option>').join('')+'</select></div>';
  const fxSel=(lb,id,L,cur)=>'<div style="display:flex;gap:6px;align-items:center;margin:6px 0"><span style="min-width:4.6em">'+lb+'</span><select id="'+id+'" style="flex:1;min-width:0;padding:6px;font-size:14px"><option value="rand"'+(cur==='rand'?' selected':'')+'>おまかせ（毎回変わる）</option><option value="none"'+(cur==='none'?' selected':'')+'>なし</option>'+L.map(x=>'<option value="'+x[0]+'"'+(x[0]===cur?' selected':'')+'>'+x[1]+'</option>').join('')+'</select><button id="'+id+'t">試す</button></div>';
- h+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line)"><div style="margin-bottom:2px">決着の演出</div><div style="font-size:12px;color:var(--sub)">勝敗が付いた時の演出。「試す」でこの画面の盤で見られます（盤をタップで中断）</div>'+fxSel('勝った時','fxw',FXW,fxPickW)+fxSel('負けた時','fxl',FXL,fxPickL)+'</div>';
+ h+='<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line)"><div style="margin-bottom:2px">決着の演出</div><div style="font-size:12px;color:var(--sub)">勝敗が付いた時の演出。「試す」でこの画面の盤で見られます（盤をタップで中断）</div>'+fxSel('勝った時','fxw',FXW,fxPickW)+fxSel('負けた時','fxl',FXL,fxPickL)+'<label style="display:flex;align-items:center;gap:8px;margin:10px 0 2px"><input type="checkbox" id="fxvoice"'+(fxVoiceOn?' checked':'')+'> セリフ音声（「お前の負けだ」など）</label><div style="font-size:12px;color:var(--sub)">'+(fxVoiceOK()?'端末の読み上げ機能を使います。声は端末ごとに違います。':'この端末では読み上げが使えないため、音声は出ません。')+'</div></div>';
  showPanelHTML(h);
  const fxBind=(id,L,win)=>{$(id).onchange=e=>{if(win)fxPickW=e.target.value;else fxPickL=e.target.value;try{localStorage.setItem(win?'sb_fx_w':'sb_fx_l',e.target.value)}catch(x){}};
-  $(id+'t').onclick=()=>{const v=$(id).value;const k=v==='rand'?L[Math.floor(Math.random()*L.length)][0]:v;if(v==='none')return;initAudio();$('pnl').style.display='none';fxRun(k,'詰み',true)}};
+  $(id+'t').onclick=()=>{const v=$(id).value;const k=v==='rand'?L[Math.floor(Math.random()*L.length)][0]:v;if(v==='none')return;initAudio();$('pnl').style.display='none';fxRun(k,'詰み',true,fxVoiceOn?FXV[win?'win':'lose'][Math.floor(Math.random()*4)]:'')}};
  fxBind('fxw',FXW,true);fxBind('fxl',FXL,false);
+ $('fxvoice').onchange=e=>{fxVoiceOn=e.target.checked;try{localStorage.setItem('sb_voice',fxVoiceOn?'1':'0')}catch(x){}if(fxVoiceOn)fxSpeak('お前の負けだ')};
  $('kfsel').onchange=e=>{komaFont=e.target.value;try{localStorage.setItem('sb_kfont',komaFont)}catch(x){}render()};
  if($('putsel'))$('putsel').onchange=e=>{putSnd=e.target.value;try{localStorage.setItem('sb_snd_put',putSnd)}catch(x){}initAudio();loadSnd(putSnd);setTimeout(()=>sfx('put'),putSnd==='synth'||sndBuf[putSnd]?0:250)};
  $('vmute').onchange=e=>{muted=e.target.checked;try{localStorage.setItem('sb_mute',muted?'1':'0')}catch(x){}$('snd').textContent=muted?'×':'♪'};

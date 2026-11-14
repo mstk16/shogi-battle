@@ -170,7 +170,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.46";
+const VERSION="0.9.47";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -712,23 +712,33 @@ function showSummary(){
  showPanelHTML(h);
 }
 function doHint(){
- if(st.win!==null||!isHum(st.turn)||aiBusy){say('人が指す番のときに使えます');return}
- if(st.sp!==false){say('特殊ルール中は、ヒントは使えません');return}
- const b=document.getElementById('hintb');b.disabled=true;say('候補を考えています…');
+ // ヒントの状況は、盤の中央のバナーとボタンの文字で必ず知らせる(下の小さい文字だけだと気付けない)
+ const bn=(t,ms,bg)=>{const o=$('cbn');if(o)o.remove();showBanner(t,ms,bg)};
+ if(st.win!==null){bn('対局は終わっています',1800);return}
+ if(!isHum(st.turn)){bn('ヒントは、あなたの番のときに使えます',1800);return}
+ if(aiBusy){bn('相手が考え中です。少し待ってからヒントを押してください',2200);return}
+ if(st.sp!==false){bn('特殊ルール中は、ヒントは使えません',2000);return}
+ const b=document.getElementById('hintb');if(b.disabled)return;
+ b.disabled=true;const bt=b.textContent;b.textContent='考え中…';bn('ヒントを考え中…',60000);say('ヒント候補を考えています…');
+ let shown=false;const res=(t,ms,bg)=>{shown=true;bn(t,ms,bg)};
  setTimeout(async()=>{try{
-  const sx=st;const R=await callRank(sx,[]);if(st!==sx)return;
-  if(!R||R.list.length<2){say('候補が1つしかありません');return}
+  const sx=st;const R=await callRank(sx,[]);
+  if(st!==sx){res('局面が変わったので、ヒントを取り消しました',1800);return}
+  if(!R||R.list.length<2){res('候補が1つしかないので、ヒントはありません',2000);return}
   const L=R.list;
   // 評価と同じ基準: 読みが浅い・どの手も同じ点数・どの手でも詰む/詰ます時は、確かなことが言えないのでヒントを出さない
   const bV0=clV(L[0].v),spr=bV0-clV(L[Math.min(3,L.length-1)].v);
-  if(R.dep<5||spr<=40||bV0<=-9000){hints=[];hintMv=null;say('この局面は、確かな候補を出せません（差が付かない／読みが足りない）。ヒントはなしにします');renderEv();render();return}
+  if(R.dep<5||spr<=40||bV0<=-9000){hints=[];hintMv=null;say('この局面は、確かな候補を出せません（差が付かない／読みが足りない）。ヒントはなしにします');res('ヒントなし：差が付かない／読みが足りない局面です',2600);renderEv();render();return}
   let c=L.slice(0,3).filter(x=>clV(L[0].v)-clV(x.v)<=GOODMAX&&!(Math.abs(bV0)>=9000&&Math.abs(clV(x.v))>=9000&&bV0*clV(x.v)>0));
-  if(!c.length){hints=[];hintMv=null;say('確かな候補を出せません。ヒントはなしにします');renderEv();render();return}
+  if(!c.length){hints=[];hintMv=null;say('確かな候補を出せません。ヒントはなしにします');res('ヒントなし：確かな候補がありません',2400);renderEv();render();return}
   const want=Math.min(c.length,2+((Math.random()*2)|0));c=c.slice(0,want);
   for(let i=c.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[c[i],c[j]]=[c[j],c[i]]}
   hints=c.map(x=>{const o=Eng.objMove(x.m),l=matchLegal(st,o,st.turn)||o;return{o:l,t:mvText(st,l,false)}});hintMv=null;hintCount++;
-  say(c.length>=2?'いい手の候補を'+hints.length+'つ、盤に出しました（番号は強さと関係ありません）':'この局面は、いい手がほぼ1つしかありません');renderEv();render();
- }finally{b.disabled=false}},30);
+  say(c.length>=2?'いい手の候補を'+hints.length+'つ、盤に出しました（番号は強さと関係ありません）':'この局面は、いい手がほぼ1つしかありません');
+  res(c.length>=2?'いい手の候補を'+hints.length+'つ出しました':'いい手はほぼ1つだけです',1600);
+  renderEv();render();
+ }catch(err){res('ヒントを出せませんでした。もう一度押してください',2200)}
+ finally{b.disabled=false;b.textContent=bt;if(!shown){const o=$('cbn');if(o)o.remove()}}},30);
 }
 function adFinish(w){
  if(aiLevel!==5||ad.fin===ad.gid||w===null||ad.samples<3)return;

@@ -170,7 +170,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.47";
+const VERSION="0.9.48";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -569,6 +569,28 @@ function analyzeFrom(R,mv){
  const p3=R.all.find(y=>y.m===pi),rk=p3?R.all.filter(y=>y.v>p3.v+1).length+1:0;
  return{rank:rk,nAll:R.all.length,best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
+// 3手詰めまでの詰みがあったのに、その詰みを実現する手を指さなかったか。指した手が(同じ長さ以内の)詰みに入るなら見逃しではない
+function mateMissOf(b,mv,sd){
+ if(b.extra>0||b.win!==null)return null;
+ let mm=null,mdd=0;
+ for(let dd=1;dd<=3&&!mm;dd++){mateNodes=0;mateDeadline=nowMs()+(dd===1?60:200);const m1=mateSearch(b,sd,dd);if(m1){mm=m1;mdd=dd}}
+ if(!mm)return null;
+ const n=applyMove(b,mv).n;
+ if(n.win===sd)return null;
+ const reps=n.win===null?legalMoves(n,1-sd):[];
+ if(!reps.length&&n.win===null)return null;
+ if(mdd>=2){let all=true;for(const r of reps){mateNodes=0;mateDeadline=nowMs()+200;const n2=applyMove(n,r).n;if(n2.win!==null||!mateSearch(n2,sd,mdd-1)){all=false;break}}if(all)return null}
+ return{mm:mm,dd:mdd};
+}
+function applyMateMiss(e,q){
+ const sd=q.side||0;let mm=null;
+ try{mm=mateMissOf(q.b,q.mv,sd)}catch(err){}
+ if(!mm)return e;
+ e.mk='✖';e.g='悪手';e.gc='g3';e.unclear=false;e.hang=false;e.quiet=false;e.loss=Math.max(e.loss||0,900);
+ e.bestT=mvText(q.b,mm.mm,true);e.bm=mm.mm;e.same=false;e.bwhy=['詰ませられる（'+mm.dd+'手詰め）'];
+ e.pwhy=['詰みを逃した（'+mm.dd+'手詰めがあった）'];e.rk=Math.max(e.rk||0,2);
+ return e;
+}
 async function analyzeMove(q){
  // 自分がもう2手以上先へ進んでいるなら、古い評価は捨てる(遅れて届いた評価が、まとめて表示・音になるのを防ぐ)
  if(hist.length-q.no>=2){evBusy=false;renderEv();return}
@@ -578,7 +600,7 @@ async function analyzeMove(q){
   const an=analyzeFrom(R0,q.mv);
   if(!an){const sd0=q.side||0,hb0=hangVal(q.b,sd0),hp0=hangVal(applyMove(q.b,q.mv).n,sd0),hg=(hp0-hb0)>=45;
    const e0={no:q.no,side:sd0,dep:0,tie:0,tied:0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:0,mk:'△',g:'疑問手',gc:'g2',unclear:!hg,hang:hg,rk:0,nAll:0,after:0,bestT:'',bestV:0,same:false,bwhy:[],pwhy:whyMove(q.b,q.mv),reply:'',quiet:false,pre:q.b,mo:q.mv,bm:null};
-   rec.push(e0);curEv=e0;renderEv();render();return}
+   applyMateMiss(e0,q);rec.push(e0);curEv=e0;renderEv();render();return}
   const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss),bV=clV(an.best.v),pV=clV(an.played.v);
   // はっきり言える時だけ評価する: 読みが浅い・どの手も同じ点数・どの手でも詰まされる・詰み同士 は「評価なし」
   const sd=q.side||0,hb=hangVal(q.b,sd),hpl=hangVal(applyMove(q.b,q.mv).n,sd);
@@ -590,6 +612,7 @@ async function analyzeMove(q){
   const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g2[0],g:g2[1],gc:g2[2],unclear:unclear,hang:hang,rk:an.rank,nAll:an.nAll,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
    bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX),pre:q.b,mo:q.mv,bm:bl};
+  applyMateMiss(e,q);
   rec.push(e);
   const fresh=(hist.length-q.no)<=0; // 次の自分の手を指した後に届いた古い評価は、記録(総合評価)にだけ残す
   if(fresh){curEv=e;if(evOn&&e.mk==='✖'&&!e.unclear&&!e.quiet&&Date.now()-lastBadSnd>2500){lastBadSnd=Date.now();sfx('bad')}}

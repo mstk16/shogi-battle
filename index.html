@@ -170,7 +170,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.48";
+const VERSION="0.9.49";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -569,22 +569,36 @@ function analyzeFrom(R,mv){
  const p3=R.all.find(y=>y.m===pi),rk=p3?R.all.filter(y=>y.v>p3.v+1).length+1:0;
  return{rank:rk,nAll:R.all.length,best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
-// 3手詰めまでの詰みがあったのに、その詰みを実現する手を指さなかったか。指した手が(同じ長さ以内の)詰みに入るなら見逃しではない
-function mateMissOf(b,mv,sd){
+// ===== 詰みの見逃し: 詰みがあるのに、その詰みに入る手を指さなかった手は、いくら駒を取っても悪手 =====
+// 詰みは7手詰めまで探す(王手だけを読むので、通常の読みより深く届く)。別スレッドで探すので画面は止まらない
+function mateFind(b,sd,deep){
  if(b.extra>0||b.win!==null)return null;
- let mm=null,mdd=0;
- for(let dd=1;dd<=3&&!mm;dd++){mateNodes=0;mateDeadline=nowMs()+(dd===1?60:200);const m1=mateSearch(b,sd,dd);if(m1){mm=m1;mdd=dd}}
- if(!mm)return null;
- const n=applyMove(b,mv).n;
- if(n.win===sd)return null;
- const reps=n.win===null?legalMoves(n,1-sd):[];
- if(!reps.length&&n.win===null)return null;
- if(mdd>=2){let all=true;for(const r of reps){mateNodes=0;mateDeadline=nowMs()+200;const n2=applyMove(n,r).n;if(n2.win!==null||!mateSearch(n2,sd,mdd-1)){all=false;break}}if(all)return null}
- return{mm:mm,dd:mdd};
+ const plan=deep?[[1,60,30000],[2,200,30000],[3,350,30000],[5,500,60000],[7,800,100000]]:[[1,60,30000],[2,200,30000],[3,250,30000]];
+ for(const [dd,ms,mx] of plan){mateMax=mx;mateNodes=0;mateDeadline=nowMs()+ms;const m1=mateSearch(b,sd,dd);if(m1){mateMax=30000;return{mm:m1,dd:dd}}}
+ mateMax=30000;return null;
 }
-function applyMateMiss(e,q){
+function mateMissOf(b,mv,sd,deep){
+ const f=mateFind(b,sd,deep);if(!f)return null;
+ const n=applyMove(b,mv).n;
+ if(n.win!==null)return null;
+ const reps=legalMoves(n,1-sd);if(!reps.length)return null; // 指した手で詰んだ
+ const need=f.dd>=3?f.dd:f.dd-1; // 3手詰め以上は、詰みを保っていれば1手の遠回りまで許す
+ if(need>=1){
+  mateMax=f.dd>=5?100000:30000;let all=true;
+  for(const r of reps){mateNodes=0;mateDeadline=nowMs()+(f.dd>=5?800:300);const n2=applyMove(n,r).n;
+   if(n2.win!==null){all=false;break}
+   if(!mateSearch(n2,sd,need)){if(mateNodes>mateMax||nowMs()>mateDeadline){mateMax=30000;return null}all=false;break}}
+  mateMax=30000;if(all)return null}
+ return f;
+}
+async function mateAsk(type,b,mv,sd){
+ const o=await wcall(evW,{t:type,b:b,mv:mv,side:sd});
+ if(o&&!o.error)return o.none?null:{mm:o.mm,dd:o.dd};
+ try{return type==='mateFind'?mateFind(b,sd,false):mateMissOf(b,mv,sd,false)}catch(e){return null}
+}
+async function applyMateMiss(e,q){
  const sd=q.side||0;let mm=null;
- try{mm=mateMissOf(q.b,q.mv,sd)}catch(err){}
+ try{mm=await mateAsk('mateMiss',q.b,q.mv,sd)}catch(err){}
  if(!mm)return e;
  e.mk='✖';e.g='悪手';e.gc='g3';e.unclear=false;e.hang=false;e.quiet=false;e.loss=Math.max(e.loss||0,900);
  e.bestT=mvText(q.b,mm.mm,true);e.bm=mm.mm;e.same=false;e.bwhy=['詰ませられる（'+mm.dd+'手詰め）'];
@@ -600,7 +614,7 @@ async function analyzeMove(q){
   const an=analyzeFrom(R0,q.mv);
   if(!an){const sd0=q.side||0,hb0=hangVal(q.b,sd0),hp0=hangVal(applyMove(q.b,q.mv).n,sd0),hg=(hp0-hb0)>=45;
    const e0={no:q.no,side:sd0,dep:0,tie:0,tied:0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:0,mk:'△',g:'疑問手',gc:'g2',unclear:!hg,hang:hg,rk:0,nAll:0,after:0,bestT:'',bestV:0,same:false,bwhy:[],pwhy:whyMove(q.b,q.mv),reply:'',quiet:false,pre:q.b,mo:q.mv,bm:null};
-   applyMateMiss(e0,q);rec.push(e0);curEv=e0;renderEv();render();return}
+   await applyMateMiss(e0,q);rec.push(e0);curEv=e0;renderEv();render();return}
   const loss=an.loss,isB=an.best.m===Eng.intMove(q.mv),g=markOf(loss),bV=clV(an.best.v),pV=clV(an.played.v);
   // はっきり言える時だけ評価する: 読みが浅い・どの手も同じ点数・どの手でも詰まされる・詰み同士 は「評価なし」
   const sd=q.side||0,hb=hangVal(q.b,sd),hpl=hangVal(applyMove(q.b,q.mv).n,sd);
@@ -612,7 +626,7 @@ async function analyzeMove(q){
   const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g2[0],g:g2[1],gc:g2[2],unclear:unclear,hang:hang,rk:an.rank,nAll:an.nAll,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
    bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX),pre:q.b,mo:q.mv,bm:bl};
-  applyMateMiss(e,q);
+  await applyMateMiss(e,q);
   rec.push(e);
   const fresh=(hist.length-q.no)<=0; // 次の自分の手を指した後に届いた古い評価は、記録(総合評価)にだけ残す
   if(fresh){curEv=e;if(evOn&&e.mk==='✖'&&!e.unclear&&!e.quiet&&Date.now()-lastBadSnd>2500){lastBadSnd=Date.now();sfx('bad')}}
@@ -747,6 +761,10 @@ function doHint(){
  setTimeout(async()=>{try{
   const sx=st;const R=await callRank(sx,[]);
   if(st!==sx){res('局面が変わったので、ヒントを取り消しました',1800);return}
+  // 詰みがあるなら、それだけを出す(7手詰めまで探す)。ほかの駒得の手より詰みが優先
+  const mf=await mateAsk('mateFind',sx,null,sx.turn);
+  if(st!==sx){res('局面が変わったので、ヒントを取り消しました',1800);return}
+  if(mf){hints=[{o:mf.mm,t:mvText(st,mf.mm,false)}];hintMv=null;hintCount++;say('詰みがあります（'+mf.dd+'手詰め）');res('詰みがあります（'+mf.dd+'手詰め）',2600);renderEv();render();return}
   if(!R||R.list.length<2){res('候補が1つしかないので、ヒントはありません',2000);return}
   const L=R.list;
   // 評価と同じ基準: 読みが浅い・どの手も同じ点数・どの手でも詰む/詰ます時は、確かなことが言えないのでヒントを出さない
@@ -767,10 +785,10 @@ function adFinish(w){
  if(aiLevel!==5||ad.fin===ad.gid||w===null||ad.samples<3)return;
  ad.fin=ad.gid;ad.adj=Math.max(-1,Math.min(1,ad.adj+(w===0?.25:-.25)));adSave();
 }
-let mateNodes=0,mateDeadline=0;
+let mateNodes=0,mateDeadline=0,mateMax=30000;
 function mateSearch(st,s,d){
  if(st.extra>0||st.win!==null)return null;
- if(++mateNodes>30000||((mateNodes&31)===0&&nowMs()>mateDeadline))return null;
+ if(++mateNodes>mateMax||((mateNodes&31)===0&&nowMs()>mateDeadline))return null;
  const o=1-s;
  for(const m of genMoves(st,s)){
   const n=applyMove(st,m).n;
@@ -1533,7 +1551,7 @@ function mkWorker(){
  try{
   const shim="self.window=self;self.document={getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{},documentElement:{}};self.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\n";
   const glue="\n;self.onmessage=function(e){const d=e.data;let out=null;try{"+
-   "if(d.t==='rank'){rankScale=2;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
+   "if(d.t==='mateMiss'||d.t==='mateFind'){const r=d.t==='mateFind'?mateFind(d.b,d.side,true):mateMissOf(d.b,d.mv,d.side,true);out=r?{mm:r.mm,dd:r.dd}:{none:true}}else if(d.t==='rank'){rankScale=2;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
    "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy,score:(aiLastInfo?aiLastInfo.score:null),hopeless:aiHopeless}}"+
    "}catch(err){out={error:String(err&&err.stack||err)}}postMessage({id:d.id,out:out})};";
   const src=shim+document.scripts[0].textContent+glue;

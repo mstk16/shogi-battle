@@ -98,8 +98,8 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #dlg .bx{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(320px,86vw)}
 #dlg .bt{display:flex;gap:8px;margin-top:14px}#dlg .bt button{flex:1;padding:10px 6px}
 #dlg #dy{background:#185FA5;color:#fff;border-color:#185FA5}
-/* 内画面(Fold等・幅640px以上): 左=盤を画面の高さいっぱいに大きく／右=持ち駒・状態・ボタン(将棋ウォーズ式に盤を最優先) */
-@media(min-width:640px){
+/* 横長の内画面(幅640px以上・横長): 左=盤を画面の高さいっぱいに大きく／右=持ち駒・状態・ボタン(将棋ウォーズ式に盤を最優先) */
+@media(min-width:640px) and (min-aspect-ratio:6/5){
  :root{--bsz:min(calc(100vh - 16px),calc(100vw - 226px))}
  #app{max-width:none;display:grid;grid-template-columns:var(--bsz) minmax(190px,1fr);column-gap:12px;align-items:start;align-content:start;padding:8px 12px}
  #bw{grid-column:1;grid-row:1/span 20;width:var(--bsz)}
@@ -110,6 +110,20 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
  #hd{flex-wrap:wrap}
  #hum{grid-template-columns:1fr;height:auto;gap:6px}
  #hum .hs button{height:34px}
+}
+/* ほぼ正方形〜縦長の内画面(Fold等・幅640px以上): 盤を画面いっぱいに(ウォーズ式)。HP・持ち駒は盤の上下の細い帯、ボタンは盤の下に1行 */
+@media(min-width:640px) and (max-aspect-ratio:6/5){
+ :root{--bsz:min(calc(100vw - 16px),calc(100vh - 248px))}
+ #app{max-width:none;width:var(--bsz);margin:0 auto;padding:6px 0 8px;display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:3px;
+  grid-template-areas:"hd hd" "top eh" "bw bw" "bot mh" "hum evl" "ctl ctl" "cpub msg"}
+ #hd{grid-area:hd;flex-wrap:nowrap}#top{grid-area:top;margin:0}#eh{grid-area:eh}#bw{grid-area:bw;width:var(--bsz)}#bot{grid-area:bot}#mh{grid-area:mh}
+ #hum{grid-area:hum;margin:0}#ctl{grid-area:ctl;margin:0}#evl{grid-area:evl;margin:0}#cpub{grid-area:cpub;height:auto;min-height:0}#msg{grid-area:msg}
+ .hand.tray{height:40px;min-height:40px;padding:1px 8px;flex-wrap:nowrap;overflow-x:auto}
+ #ctl{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}#ctl button{min-width:0;height:34px;padding:0 2px;font-size:12px;white-space:nowrap}
+ #hd{height:26px}#hd button{padding:3px 7px}#top{margin:0!important}
+ #bot .row,#top .row{flex-wrap:nowrap}#bot button{font-size:11px;padding:3px 6px;white-space:nowrap;line-height:1.2}
+ #hum{height:34px}#evl{height:34px;margin:0}
+ #cpub{height:28px;overflow:hidden}#msg{height:28px;overflow:hidden;font-size:12px}
 }
 </style></head><body><div id="app">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="kg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE9B0"/><stop offset=".5" stop-color="#F4C677"/><stop offset="1" stop-color="#DC9F48"/></linearGradient></defs></svg>
@@ -142,7 +156,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.34";
+const VERSION="0.9.35";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};

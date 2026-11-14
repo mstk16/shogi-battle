@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.25";
+const VERSION="0.9.26";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1474,10 +1474,10 @@ function komaSVG(pc,atkOn){
  // 参考: 将棋ウォーズ風。明るい木の駒＋濃い縁取り＋下側の厚み(立体感)＋真っ黒で太い文字(成駒は濃い赤)
  const k=faceOf(pc),col=pc.p?'#C0120A':'#0B0603',rot=pc.s===1?' transform="rotate(180 50 54)"':'';
  const a=Math.round(ATK[pc.t]*(pc.p?1.5:1));
- const tx=(x,y,fs,str)=>'<text x="'+x+'" y="'+y+'" text-anchor="middle" font-size="'+fs+'" font-weight="900" fill="'+col+'" stroke="'+col+'" stroke-width="'+(fs*.045).toFixed(2)+'" stroke-linejoin="round" font-family="serif">'+str+'</text>';
+ const tx=(x,y,fs,str)=>'<text x="'+x+'" y="'+y+'" text-anchor="middle" font-size="'+fs+'" font-weight="700" fill="'+col+'" font-family="serif">'+str+'</text>';
  let t='';
- if(k.length>1){const y1=atkOn?30:40,y2=atkOn?60:76,fs=atkOn?25:31;t=tx(50,y1,fs,k[0])+tx(50,y2,fs,k[1])}
- else{const y=atkOn?58:65,fs=atkOn?40:48;t=tx(50,y,fs,k)}
+ if(k.length>1){const y1=atkOn?30:42,y2=atkOn?60:80,fs=atkOn?25:34;t=tx(50,y1,fs,k[0])+tx(50,y2,fs,k[1])}
+ else{const y=atkOn?58:68,fs=atkOn?40:54;t=tx(50,y,fs,k)}
  const at=atkOn?'<text x="50" y="92" text-anchor="middle" font-size="16" font-weight="900" fill="'+col+'">'+a+'</text>':'';
  return '<svg class="kv" viewBox="0 0 100 108"><g'+rot+'>'
   +'<polygon points="50,9 84,27 92,104 8,104 16,27" fill="#7A4A12" stroke="#2A1704" stroke-width="3" stroke-linejoin="round"/>'

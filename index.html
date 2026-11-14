@@ -182,7 +182,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.55";
+const VERSION="0.9.56";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1400,7 +1400,7 @@ function chooseAIv1(st,maxDepth,seen,thinkMs){
 }
 let aiHopeless=false;
 function chooseAI(st,maxDepth,seen,thinkMs){
- aiLastInfo=null;aiHopeless=false;
+ aiLastInfo=null;aiHopeless=false;aiDbg=null;
  const LV=curLV();
  const me=st.turn,legal=legalMoves(st,me);
  if(!legal.length)return null;
@@ -1423,10 +1423,11 @@ function chooseAI(st,maxDepth,seen,thinkMs){
   best=legal.find(m=>o.d?(m.d===o.d&&m.to[0]===o.to[0]&&m.to[1]===o.to[1]):(!m.d&&m.f[0]===o.f[0]&&m.f[1]===o.f[1]&&m.to[0]===o.to[0]&&m.to[1]===o.to[1]&&!!m.pr===!!o.pr))}
  if(!best)best=legal[0];
  aiLastInfo=res?{depth:res.depth,nodes:res.nodes,score:res.score}:null;
+ aiDbg={depth:res?res.depth:0,pen:pen.get(Eng.intMove(best))||0}; // 原因調べ用: 読んだ深さと、同じ局面の繰り返しを避ける減点
  aiWhy=explainMove(st,best).label;
  return best;
 }
-let aiLastInfo=null;
+let aiLastInfo=null,aiDbg=null;
 // ===== 戦法ライブラリ（先手側の筋・段で書き、後手AIには左右上下を反転して当てる）=====
 // 形は [筋,段,駒]。筋・段は先手から見た将棋の表記（例: 美濃囲いの玉は2八）
 const CASTLES={
@@ -1587,7 +1588,7 @@ function mkWorker(){
   const shim="self.window=self;self.document={getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{},documentElement:{}};self.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\n";
   const glue="\n;self.onmessage=function(e){const d=e.data;let out=null;try{"+
    "if(d.t==='mateMiss'||d.t==='mateFind'){const r=d.t==='mateFind'?mateFind(d.b,d.side,true):mateMissOf(d.b,d.mv,d.side,true);out=r?{mm:r.mm,dd:r.dd}:{none:true}}else if(d.t==='rank'){rankScale=2;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
-   "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy,score:(aiLastInfo?aiLastInfo.score:null),hopeless:aiHopeless}}"+
+   "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy,score:(aiLastInfo?aiLastInfo.score:null),hopeless:aiHopeless,dbg:aiDbg}}"+
    "}catch(err){out={error:String(err&&err.stack||err)}}postMessage({id:d.id,out:out})};";
   const src=shim+document.scripts[0].textContent+glue;
   const w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
@@ -1604,11 +1605,20 @@ async function callRank(x,extra){
  if(o&&!o.error)return o;
  return rankPos(x,extra);
 }
-let cpuScore=null,cpuHopeless=false,lostCnt=0,noResign=false;
+let cpuScore=null,cpuHopeless=false,lostCnt=0,noResign=false,cpuDbg=null;
 async function chooseA(x){
  const o=await wcall(cpuW,{t:'choose',st:x,aiLevel:aiLevel,aiSide:aiSide,planId:aiPlan&&aiPlan.id,castle:aiPlan&&aiPlan.castle,aim:aiAim,aiStyle:aiStyle,aiSeed:aiSeed,aiLast:aiLast,ad:{acpl:ad.acpl,n:ad.n,adj:ad.adj,band:ad.band},seen:[...seen]});
- if(o&&!o.error&&o.move!==undefined){aiWhy=o.why;cpuScore=o.score;cpuHopeless=!!o.hopeless;return o.move}
- const mm=chooseAI(x,4,seen);cpuScore=aiLastInfo?aiLastInfo.score:null;cpuHopeless=aiHopeless;return mm;
+ if(o&&!o.error&&o.move!==undefined){aiWhy=o.why;cpuScore=o.score;cpuHopeless=!!o.hopeless;cpuDbg=o.dbg||null;return o.move}
+ const mm=chooseAI(x,4,seen);cpuScore=aiLastInfo?aiLastInfo.score:null;cpuHopeless=aiHopeless;cpuDbg=aiDbg;return mm;
+}
+// 相手(CPU)が指した手を、プレイヤーの手と同じ基準で自己採点する。疑問手以下の時だけ、メッセージ欄に出す(原因調べ用)
+async function cpuCheck(b,mv,no,base,dbg){
+ try{
+  const R=await callRank(b,[mv]);if(hist.length!==no||st.win!==null)return;
+  const an=analyzeFrom(R,mv);if(!an||an.dep<5||an.loss<=GOODMAX)return;
+  const g=markOf(an.loss),bo=Eng.objMove(an.best.m),bm=matchLegal(b,bo,b.turn)||bo;
+  say(base+'　相手の手の自己採点：'+g[0]+g[1]+'（最善は'+mvText(b,bm,true)+'）読み'+((dbg&&dbg.depth)||'?')+((dbg&&dbg.pen)?'・反復減点'+dbg.pen:''));
+ }catch(e){}
 }
 let hum=[true,false];try{const h=JSON.parse(localStorage.getItem('sb_hum')||'null');if(Array.isArray(h)&&h.length===2)hum=[!!h[0],!!h[1]]}catch(e){}
 const isHum=sd=>!!hum[sd],humOne=()=>hum[0]!==hum[1],humSide=()=>hum[0]?0:1;
@@ -1822,7 +1832,7 @@ function special(){
  if(st.g[0]<GMAX){say('必殺はあと'+(GMAX-st.g[0])+'コンボ。駒を取るとたまる');return}
  st.g[0]=0;st.extra=1;say('必殺「二連」発動。この手のあと、もう1手指せる');render();showBanner('必殺「二連」！ もう1手',1400,'#185FA5');
 }
-let exMark=0,hist=[],pendingWhy='';
+let exMark=0,hist=[],pendingWhy='',pendingDbg=null;
 let lastFrom=null,lastCpu=false;
 function snapshot(){return{st:st,last:last,lf:lastFrom,lc:lastCpu,exMark:exMark,aiMoves:aiMoves}}
 function preMove(mv){
@@ -1869,6 +1879,7 @@ function play(mv){
  if(st.win===null&&st.extra===0){const lm=legalMoves(st,st.turn);if(!lm.length){st.win=1-st.turn;endReason='詰み';t+='　詰み'}else if(inCheck(st,st.turn)){t+='　王手！';gaveCheck=true}}
  if(st.win!==null&&!endReason)endReason=(cap&&cap.t==='王')?'王を取った':'HPが0になった';
  say(t);render();fx(mv,cap,dmg,who,n);
+ if(!isHum(who)){const dbg=pendingDbg;pendingDbg=null;if(evOn&&st.win===null&&st.sp===false&&st.extra===0&&humOne())cpuCheck(stB,mv,hist.length,t,dbg)}
  animMove(mv,who,cap,pre);
  if(isHum(who)){hints=[];hintMv=null;if(st.win===null&&st.sp===false&&st.extra===0&&(evOn||(aiLevel===5&&humOne())))ad.pend={b:stB,a:st,mv:mv,no:hist.length,side:who};else ad.pend=null;evBusy=!!(ad.pend&&evOn);quickEv=null;if(evBusy&&hist.length>=6){const qb=quickBad(stB,mv,who);if(qb)quickEv={no:hist.length,t:qb}}renderEv();
   if(ad.pend)setTimeout(()=>{if(ad.pend){const q=ad.pend;ad.pend=null;analyzeMove(q)}},60)}
@@ -1896,7 +1907,7 @@ function maybeAI(){
   if(m&&st.sp===false&&humOne()&&aiMoves>=14&&cpuHopeless&&!noResign){st.win=1-s;endReason='相手が投了（3手以内の詰みが避けられない）';ovHidden=false;say('相手が投了した');render();save();return}
   P.plan=aiPlan;P.aim=aiAim;P.moves=aiMoves;
   if(!m){st.win=1-s;endReason='指せる手がない（詰み）';render();return}
-  pendingWhy=aiWhy;aiLast=m.d?null:{f:m.f,to:m.to};P.last=aiLast;
+  pendingWhy=aiWhy;pendingDbg=cpuDbg;aiLast=m.d?null:{f:m.f,to:m.to};P.last=aiLast;
   if(pause){aiBusy=true;setTimeout(()=>{aiBusy=false;if(!isHum(st.turn)&&st.win===null)play(m)},pause)}else play(m);
  },450);
 }

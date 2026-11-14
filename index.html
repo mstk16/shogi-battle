@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.23";
+const VERSION="0.9.24";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1542,16 +1542,22 @@ const SND_PUT='SUQzAgAAAAAfdlRTUwAADQBMb2dpYyAxMC4yLjFDT00AAGgAZW5naVR1bk5PUk0AI
 let putBuf=null,putLoading=false;
 function loadPutSnd(){if(putBuf||putLoading||!ac)return;putLoading=true;try{const bin=atob(SND_PUT),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
  const r=ac.decodeAudioData(u.buffer,b=>{putBuf=b},()=>{putLoading=false});if(r&&r.catch)r.catch(()=>{putLoading=false})}catch(e){putLoading=false}}
+// 音量(0〜1)。種類ごとに個別: put=駒を指す(持ち駒・成りも) / cap=駒を取る / alert=王手・勝ち負け
+const VOLS=[['put','駒を指す音'],['cap','駒を取る音'],['alert','王手・勝ち負けの音']];
+let vol={put:1,cap:1,alert:1};
+try{const o=JSON.parse(localStorage.getItem('sb_vol')||'null');if(o)for(const k in vol)if(typeof o[k]==='number')vol[k]=Math.max(0,Math.min(1,o[k]))}catch(e){}
+function volSave(){try{localStorage.setItem('sb_vol',JSON.stringify(vol))}catch(e){}}
 function sfx(kind){
  if(muted)return;initAudio();if(!ac)return;
+ const vm=vol[kind==='cap'?'cap':(kind==='chk'||kind==='win'||kind==='lose')?'alert':'put'];if(vm<=0.005)return;
  loadPutSnd();
  const t=ac.currentTime;
- const tone=(f,d,type,gv,at,f2)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t+(at||0));o.frequency.exponentialRampToValueAtTime(Math.max(40,f2||f*.5),t+(at||0)+d);g.gain.setValueAtTime(0.0001,t+(at||0));g.gain.exponentialRampToValueAtTime(gv,t+(at||0)+.008);g.gain.exponentialRampToValueAtTime(.0008,t+(at||0)+d);o.connect(g);g.connect(ac.destination);o.start(t+(at||0));o.stop(t+(at||0)+d+.02)};
+ const tone=(f,d,type,gv,at,f2)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t+(at||0));o.frequency.exponentialRampToValueAtTime(Math.max(40,f2||f*.5),t+(at||0)+d);g.gain.setValueAtTime(0.0001,t+(at||0));g.gain.exponentialRampToValueAtTime(Math.max(.0009,gv*vm),t+(at||0)+.008);g.gain.exponentialRampToValueAtTime(.0008,t+(at||0)+d);o.connect(g);g.connect(ac.destination);o.start(t+(at||0));o.stop(t+(at||0)+d+.02)};
  const noise=(d,gv,hp)=>{if(!noiseBuf){noiseBuf=ac.createBuffer(1,ac.sampleRate*0.3,ac.sampleRate);const a=noiseBuf.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=Math.random()*2-1}
-  const s2=ac.createBufferSource();s2.buffer=noiseBuf;const f=ac.createBiquadFilter();f.type='highpass';f.frequency.value=hp;const g=ac.createGain();g.gain.setValueAtTime(gv,t);g.gain.exponentialRampToValueAtTime(.001,t+d);s2.connect(f);f.connect(g);g.connect(ac.destination);s2.start(t);s2.stop(t+d+.02)};
+  const s2=ac.createBufferSource();s2.buffer=noiseBuf;const f=ac.createBiquadFilter();f.type='highpass';f.frequency.value=hp;const g=ac.createGain();g.gain.setValueAtTime(Math.max(.0012,gv*vm),t);g.gain.exponentialRampToValueAtTime(.001,t+d);s2.connect(f);f.connect(g);g.connect(ac.destination);s2.start(t);s2.stop(t+d+.02)};
  const pr=0.94+Math.random()*.12;
  if(kind==='put'){
-  if(putBuf){const s2=ac.createBufferSource();s2.buffer=putBuf;s2.playbackRate.value=0.97+Math.random()*.06;const g=ac.createGain();g.gain.value=1;s2.connect(g);g.connect(ac.destination);s2.start(t)}
+  if(putBuf){const s2=ac.createBufferSource();s2.buffer=putBuf;s2.playbackRate.value=0.97+Math.random()*.06;const g=ac.createGain();g.gain.value=vm;s2.connect(g);g.connect(ac.destination);s2.start(t)}
   else{noise(.03,.4,2200);tone(820*pr,.07,'sine',.28,0,380);tone(240*pr,.13,'sine',.26,0,140)}}
  else if(kind==='cap'){noise(.04,.6,1800);tone(760*pr,.08,'sine',.34,0,340);tone(200*pr,.17,'sine',.34,0,110)}
  else if(kind==='tray'){noise(.02,.18,2600);tone(980*pr,.05,'sine',.12,0,520)}
@@ -1673,7 +1679,18 @@ const trayClick=sd=>e=>{
 $('mh').onclick=trayClick(0);$('eh').onclick=trayClick(1);
 function setFace(f){face=f;try{localStorage.setItem('sb_face',f)}catch(e){}render()}
 $('snd').textContent=muted?'×':'♪';
-$('snd').onclick=()=>{muted=!muted;try{localStorage.setItem('sb_mute',muted?'1':'0')}catch(e){}$('snd').textContent=muted?'×':'♪';if(!muted){initAudio();sfx('put')}};
+function openVol(){
+ let h='<div><b>効果音の音量</b></div><div style="font-size:12px;color:var(--sub);margin-bottom:6px">スライダーを離すと、その音が1回鳴ります</div>';
+ h+='<label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" id="vmute"'+(muted?' checked':'')+'> すべての音を消す</label>';
+ for(const [k,n] of VOLS)h+='<div style="margin:10px 0"><div style="display:flex;justify-content:space-between"><span>'+n+'</span><span id="vv_'+k+'">'+Math.round(vol[k]*100)+'%</span></div><input type="range" min="0" max="100" step="5" value="'+Math.round(vol[k]*100)+'" data-k="'+k+'" class="vsl" style="width:100%"></div>';
+ showPanelHTML(h);
+ $('vmute').onchange=e=>{muted=e.target.checked;try{localStorage.setItem('sb_mute',muted?'1':'0')}catch(x){}$('snd').textContent=muted?'×':'♪'};
+ document.querySelectorAll('.vsl').forEach(el=>{
+  el.oninput=()=>{const k=el.dataset.k;vol[k]=el.value/100;$('vv_'+k).textContent=el.value+'%'};
+  el.onchange=()=>{volSave();const k=el.dataset.k;sfx(k==='cap'?'cap':k==='alert'?'chk':'put')};
+ });
+}
+$('snd').onclick=openVol;
 $('fm').onclick=()=>setFace(1);$('fc').onclick=()=>setFace(2);
 $('over').onclick=e=>{if(e.target===$('over')){ovHidden=true;render()}};
 $('ovshow').onclick=()=>{ovHidden=false;render()};

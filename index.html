@@ -82,6 +82,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 .c.hint{outline:2px dashed #185FA5;outline-offset:-3px}.hb.hint{outline:2px dashed #185FA5;outline-offset:1px;border-radius:6px}
 #over{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:8}
 #over .bx{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px 20px;width:min(260px,76%);text-align:center}
+#over #ovcont{width:100%;margin-top:8px;padding:9px 6px}
 #over #rs{width:100%;margin-top:12px;padding:10px 6px;background:#185FA5;color:#fff;border-color:#185FA5}
 #setup{position:absolute;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:10}
 #setup .bx{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px 18px;width:min(300px,88%)}
@@ -144,7 +145,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="cpub"></div>
 <div id="bw" style="position:relative"><div id="bd"></div>
 <div id="dlg"><div class="bx"><div id="dm" style="font-size:15px;line-height:1.5"></div><div class="bt"><button id="dn"></button><button id="dy"></button></div></div></div>
-<div id="over"><div class="bx"><div id="ovt" style="font-size:20px;font-weight:500"></div><div id="ovr" style="font-size:13px;color:var(--sub);margin-top:4px"></div><div class="bt2"><button id="sumbtn">総合評価</button><button id="rs">もう一局</button></div></div></div>
+<div id="over"><div class="bx"><div id="ovt" style="font-size:20px;font-weight:500"></div><div id="ovr" style="font-size:13px;color:var(--sub);margin-top:4px"></div><div class="bt2"><button id="sumbtn">総合評価</button><button id="rs">もう一局</button></div><button id="ovcont" style="display:none">このまま続ける（練習）</button></div></div>
 <div id="pnl"><div class="bx"><div id="pt"></div><div class="bt"><button id="pc">とじる</button></div></div></div>
 <button id="ovshow">結果を見る</button>
 <div id="setup"><div class="bx"><div style="font-size:18px;font-weight:500">対局の設定</div>
@@ -167,7 +168,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.40";
+const VERSION="0.9.41";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1580,7 +1581,7 @@ function render(){
  $('fm').style.display=$('fc').style.display=st.sp===false?'none':'';$('fm').style.fontWeight=face===1?600:400;$('fc').style.fontWeight=face===2?600:400;
  $('ver').textContent='v'+VERSION+(st.sp===false?'':' ・特殊ルール');$('lv').textContent='強さ:'+(aiLevel===5?adLabel():LEVELS[aiLevel].n);
  drawHints();drawLast();
- if(st.win!==null){const hw=humOne()?(st.win===humSide()?0:1):null;recStat(hw);adFinish(hw);$('ovt').textContent=humOne()?(st.win===humSide()?'あなたの勝ち':'相手の勝ち'):(st.win===0?'下▲の勝ち':'上△の勝ち');$('ovr').textContent=endReason;$('over').style.display=ovHidden?'none':'flex';$('ovshow').style.display=ovHidden?'block':'none'}else{ovHidden=false;$('over').style.display='none';$('ovshow').style.display='none'}
+ if(st.win!==null){const hw=humOne()?(st.win===humSide()?0:1):null;recStat(hw);adFinish(hw);$('ovt').textContent=humOne()?(st.win===humSide()?'あなたの勝ち':'相手の勝ち'):(st.win===0?'下▲の勝ち':'上△の勝ち');$('ovr').textContent=endReason;$('ovcont').style.display=/持ち時間切れ/.test(endReason)?'':'none';$('over').style.display=ovHidden?'none':'flex';$('ovshow').style.display=ovHidden?'block':'none'}else{ovHidden=false;$('over').style.display='none';$('ovshow').style.display='none'}
 }
 function fx(mv,cap,dmg,who,n){
  const cell=document.querySelector('.c[data-r="'+mv.to[0]+'"][data-c="'+mv.to[1]+'"]');
@@ -1764,6 +1765,8 @@ $('snd').onclick=openVol;
 $('fm').onclick=()=>setFace(1);$('fc').onclick=()=>setFace(2);
 $('over').onclick=e=>{if(e.target===$('over')){ovHidden=true;render()}};
 $('ovshow').onclick=()=>{ovHidden=false;render()};
+// 切れ負けで勝敗がついても、勉強のためにそのまま続けられる(時計は止める)
+$('ovcont').onclick=()=>{clk={limit:0,t:[0,0],last:Date.now()};st.win=null;endReason='';ovHidden=false;say('時間切れの勝敗はつけたまま、練習として続けます（時計は止めました）');render();save();if(!isHum(st.turn))maybeAI()};
 // ===== 持ち時間(切れ負け): 自分の番の間だけ減り、0になったら負け。CPUの番も実時間で減る(1手の読みは数秒以内) =====
 let clkChoice=0,clk={limit:0,t:[0,0],last:0};
 try{const v=+localStorage.getItem('sb_clk');if([0,60,120,180,300,600].includes(v))clkChoice=v}catch(e){}

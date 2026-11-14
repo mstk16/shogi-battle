@@ -151,7 +151,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="pnl"><div class="bx"><div id="pt"></div><div class="bt"><button id="pc">とじる</button></div></div></div>
 <button id="ovshow">結果を見る</button>
 <div id="setup"><div class="bx"><div style="font-size:18px;font-weight:500">対局の設定</div>
-<div class="lbl">特殊ルール（HP・コンボ・必殺）</div><div class="seg" id="segsp"><button data-v="1">あり</button><button data-v="0">なし</button></div>
+<div class="lbl" style="display:none">特殊ルール（HP・コンボ・必殺）</div><div class="seg" id="segsp" style="display:none"><button data-v="1">あり</button><button data-v="0">なし</button></div>
 <div class="lbl">持ち時間（切れ負け）</div><div class="seg" id="segclk"><button data-v="0">なし</button><button data-v="600">10分</button><button data-v="300">5分</button><button data-v="180">3分</button><button data-v="120">2分</button><button data-v="60">1分</button></div>
 <div class="lbl">対局の形</div><div class="seg" id="segopp"><button data-v="0">あなた対CPU</button><button data-v="1">二人で自由</button><button data-v="2">CPU同士</button></div>
 <div class="lbl">あなたの手番</div><div class="seg" id="segfirst"><button data-v="0">先手</button><button data-v="1">後手</button><button data-v="2">ランダム</button></div>
@@ -170,7 +170,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.49";
+const VERSION="0.9.50";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1856,10 +1856,10 @@ function clkTick(){
  clkDraw();
 }
 setInterval(clkTick,200);
-function doRestart(sp,first){clkInit();noResign=false;planStore=newStore();rec=[];hints=[];hintMv=null;hintCount=0;curEv=null;renderEv();ad.gid++;ad.band=0;ad.pend=null;ad.samples=0;endReason='';ovHidden=false;book=newBook();newStyle();aiPlan=null;aiMoves=0;seen=new Map();hist=[];exMark=0;st=newState(sp);st.turn=first===1?1:0;sel=handSel=last=null;lastFrom=null;lastCpu=false;say(oppChoice===1?'二人で対局。下▲・上△どちらもタップで指せます':oppChoice===2?'CPU同士の対局です。下のスイッチで、途中から人に切り替えられます':(first===1?'あなたは後手。相手が先に指す':(first===0?'あなたは先手':'')));render();save();if(!isHum(st.turn))maybeAI()}
+function doRestart(sp,first){clkInit();noResign=false;planStore=newStore();rec=[];hints=[];hintMv=null;hintCount=0;curEv=null;renderEv();ad.gid++;ad.band=0;ad.pend=null;ad.samples=0;endReason='';ovHidden=false;book=newBook();newStyle();aiPlan=null;aiMoves=0;seen=new Map();hist=[];exMark=0;st=newState(false);st.turn=first===1?1:0;sel=handSel=last=null;lastFrom=null;lastCpu=false;say(oppChoice===1?'二人で対局。下▲・上△どちらもタップで指せます':oppChoice===2?'CPU同士の対局です。下のスイッチで、途中から人に切り替えられます':(first===1?'あなたは後手。相手が先に指す':(first===0?'あなたは先手':'')));render();save();if(!isHum(st.turn))maybeAI()}
 let spChoice=false,lvChoice=2,firstChoice=0,setupCancel=false;
 try{const f=localStorage.getItem('sb_first');if(f==='1'||f==='2')firstChoice=+f}catch(e){}
-try{if(localStorage.getItem('sb_sp')==='1')spChoice=true}catch(e){}
+spChoice=false; // 特殊ルール(HP・コンボ・必殺)は廃止: 常になし
 const PL_ATT=['居飛車','棒銀','嬉野流','四間飛車','三間飛車','中飛車','向かい飛車','藤井システム','ゴキゲン中飛車','鬼殺し'],PL_CAS=['美濃','高美濃','銀冠','穴熊','矢倉','左美濃','雁木'];
 let pickA=new Set(),pickC=new Set();
 function plCount(){return PLANS.filter(x=>planOKf(x,pickA.size?pickA:null,pickC.size?pickC:null)).length}
@@ -1936,7 +1936,7 @@ function loadGame(){
  try{
   const j=JSON.parse(localStorage.getItem('sb_game')||'null');
   if(!j||j.v!==1||!j.st||j.st.win!==null||!Array.isArray(j.st.b)||j.st.b.length!==81)return false;
-  st=j.st;last=j.last||null;aiPlan=PLANS.find(x=>x.id===j.planId)||null;aiAim=j.aim||null;aiMoves=j.aiMoves||0;exMark=j.exMark||0;lastFrom=Array.isArray(j.lf)?j.lf:null;lastCpu=!!j.lc;
+  st=j.st;st.sp=false;last=j.last||null;aiPlan=PLANS.find(x=>x.id===j.planId)||null;aiAim=j.aim||null;aiMoves=j.aiMoves||0;exMark=j.exMark||0;lastFrom=Array.isArray(j.lf)?j.lf:null;lastCpu=!!j.lc;
   if(Array.isArray(j.hum)&&j.hum.length===2){hum=[!!j.hum[0],!!j.hum[1]];humSave()}
   planStore=newStore();if(Array.isArray(j.ps)&&j.ps.length===2){j.ps.forEach((x,i)=>{planStore[i]={plan:PLANS.find(y=>y.id===x.id)||null,aim:x.aim||null,moves:x.moves||0,last:null}})}else planStore[1]={plan:aiPlan,aim:aiAim,moves:aiMoves,last:null};
   if(j.clk&&j.clk.limit&&Array.isArray(j.clk.t)){clk={limit:j.clk.limit,t:[+j.clk.t[0]||0,+j.clk.t[1]||0],last:Date.now()}}else clk={limit:0,t:[0,0],last:Date.now()};

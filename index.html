@@ -129,7 +129,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.29";
+const VERSION="0.9.30";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -492,6 +492,7 @@ function replyOf(x,m){
  }catch(e){return ''}
 }
 const evCache={key:'',res:null};
+let rankScale=1; // 別スレッド(Worker)では時間を長く使う: 遅い端末でも読みが浅くならず「評価なし」にならない
 // 評価もヒントも、この1つの読みを使う(同じ局面なら結果を使い回す＝食い違わない)
 function rankPos(x,extra){
  const key=posKey(x)+'|'+x.turn,ex=(extra||[]).map(m=>Eng.intMove(m));
@@ -501,20 +502,20 @@ function rankPos(x,extra){
   if(!miss.length)return C;
   // 足りない手だけ、順位表と同じ深さで読んで足す(順位表そのものは作り直さない=結果が揺れない)
   const d=C.tieDep||C.dep;
-  if(d>=3){const r=Eng.rank(x,{depth:d,ms:900,only:miss});
+  if(d>=3){const r=Eng.rank(x,{depth:d,ms:900*rankScale,only:miss});
    if(r.complete&&r.length===miss.length){C.list=C.list.concat(r).sort((a,b)=>b.v-a.v);return C}}
  }
- let i0=Eng.rank(x,{depth:3,ms:350}),shallow=false;
- if(!i0.complete){const a=Eng.rank(x,{depth:3,ms:1000});if(a.complete)i0=a;else{const b=Eng.rank(x,{depth:2,ms:800});if(!b.complete)return null;i0=b;shallow=true}}
+ let i0=Eng.rank(x,{depth:3,ms:350*rankScale}),shallow=false;
+ if(!i0.complete){const a=Eng.rank(x,{depth:3,ms:1000*rankScale});if(a.complete)i0=a;else{const b=Eng.rank(x,{depth:2,ms:800*rankScale});if(!b.complete)return null;i0=b;shallow=true}}
  if(i0.length<2)return null;
  if(shallow){const res0={list:i0,all:i0,dep:2,tieDep:0,key:key};evCache.key=key;evCache.res=res0;return res0}
  const top=i0.slice(0,4).map(y=>y.m);ex.forEach(e=>{if(!top.includes(e))top.push(e)});
- let r2=Eng.rank(x,{depth:5,ms:400,only:top}),dep=5;
- if(r2.complete){const r3=Eng.rank(x,{depth:6,ms:700,only:top});if(r3.complete){r2=r3;dep=6}}
+ let r2=Eng.rank(x,{depth:5,ms:400*rankScale,only:top}),dep=5;
+ if(r2.complete){const r3=Eng.rank(x,{depth:6,ms:700*rankScale,only:top});if(r3.complete){r2=r3;dep=6}}
  if(!r2.complete){r2=i0;dep=3}
  let tieDep=0;
  if(dep>=5){const bv=clV(r2[0].v),tie=r2.filter(y=>bv-clV(y.v)<=30).map(y=>y.m);
-  if(tie.length>1){const r4=Eng.rank(x,{depth:8,ms:800,only:tie});
+  if(tie.length>1){const r4=Eng.rank(x,{depth:8,ms:800*rankScale,only:tie});
    if(r4.complete&&r4.length===tie.length){const mp=new Map(r4.map(y=>[y.m,y.v]));
     r2=r2.map(y=>mp.has(y.m)?{m:y.m,v:mp.get(y.m)}:y).sort((a,b)=>b.v-a.v);tieDep=8}}}
  const res={list:r2,all:i0,dep:dep,tieDep:tieDep,key:key};evCache.key=key;evCache.res=res;return res;
@@ -541,7 +542,7 @@ async function analyzeMove(q){
   const blm=matchLegal(q.b,Eng.objMove(an.best.m),sd),hbest=blm?hangVal(applyMove(q.b,blm).n,sd):hb;
   const hang=!isB&&(hpl-hb)>=45&&(hpl-hbest)>=45;
   let g2=g;if(hang&&loss<=GOODMAX)g2=markOf(GOODMAX+10);
-  const unclear=!hang&&(an.dep<5||(loss<=GOODMAX&&an.spread<=40)||bV<=-9000||(Math.abs(bV)>=9000&&Math.abs(pV)>=9000&&bV*pV>0));
+  const unclear=!hang&&(an.dep<5||(loss<=GOODMAX&&an.spread<=40&&an.rank>3)||bV<=-9000||(Math.abs(bV)>=9000&&Math.abs(pV)>=9000&&bV*pV>0));
   const bo=Eng.objMove(an.best.m),bl=matchLegal(q.b,bo,q.side||0)||bo;
   const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g2[0],g:g2[1],gc:g2[2],unclear:unclear,hang:hang,rk:an.rank,nAll:an.nAll,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
@@ -1443,7 +1444,7 @@ function mkWorker(){
  try{
   const shim="self.window=self;self.document={getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{},documentElement:{}};self.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\n";
   const glue="\n;self.onmessage=function(e){const d=e.data;let out=null;try{"+
-   "if(d.t==='rank'){const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
+   "if(d.t==='rank'){rankScale=4;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
    "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy}}"+
    "}catch(err){out={error:String(err&&err.stack||err)}}postMessage({id:d.id,out:out})};";
   const src=shim+document.scripts[0].textContent+glue;

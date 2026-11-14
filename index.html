@@ -168,7 +168,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.42";
+const VERSION="0.9.43";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1263,7 +1263,8 @@ function defendThreat(st,me){
   if(gaveChk){d=d-1;if(m.d)sc-=80}
   if(d>bd||(d===bd&&sc>bs)){bd=d;bs=sc;best=m}
  }
- return{m:best,why:bd>=99?'詰めろを受ける（相手の詰み筋を消す）':'詰みを遅らせて粘る',thr};
+ let score=null;try{const r=Eng.choose(st,{ms:120,maxDepth:2,noise:0,seed:0,side:me});score=r?r.score:null}catch(e){}
+ return{m:best,why:bd>=99?'詰めろを受ける（相手の詰み筋を消す）':'詰みを遅らせて粘る',thr,score};
 }
 function chooseAIv1(st,maxDepth,seen,thinkMs){
  const LV={d:3,w:5,ms:1200};maxDepth=LV.d;thinkMs=LV.ms;
@@ -1274,7 +1275,7 @@ function chooseAIv1(st,maxDepth,seen,thinkMs){
  for(const m of root){const q=st.b[idx(m.to[0],m.to[1])];if(q&&q.t==='王'&&q.s!==me)return m}
  mateNodes=0;mateDeadline=nowMs()+(LV.d>=3?400:150);
  if(st.extra===0){const mx=LV.d>=4?4:LV.d>=3?3:1;for(let dd=1;dd<=mx;dd++){mateNodes=0;const mm=mateSearch(st,me,dd);if(mm){aiWhy='詰ませに行く（'+(dd===1?'一手詰め':dd+'手詰めまで読み切った')+'）';return mm}}}
- if(st.extra===0){const dt=defendThreat(st,me);if(dt&&dt.m){aiWhy=dt.why;return dt.m}}
+ if(st.extra===0){const dt=defendThreat(st,me);if(dt&&dt.m){aiWhy=dt.why;aiHopeless=(typeof dt.why==='string'&&dt.why.indexOf('粘る')>=0);aiLastInfo=dt.score!=null?{depth:2,nodes:0,score:dt.score}:null;return dt.m}}
  let bestMove=root[0];aiNodes=0;aiLimit=400000;aiDeadline=nowMs()+(thinkMs||1200);
  const pen=new Map();
  if(seen)for(const m of root){const c=seen.get(posKey(applyMove(st,m).n))||0;if(c>0)pen.set(m,c>1?60:18)}
@@ -1309,7 +1310,9 @@ function chooseAIv1(st,maxDepth,seen,thinkMs){
  aiWhy=bestMove?explainMove(st,bestMove).label:'';
  return bestMove;
 }
+let aiHopeless=false;
 function chooseAI(st,maxDepth,seen,thinkMs){
+ aiLastInfo=null;aiHopeless=false;
  const LV=curLV();
  const me=st.turn,legal=legalMoves(st,me);
  if(!legal.length)return null;
@@ -1317,7 +1320,7 @@ function chooseAI(st,maxDepth,seen,thinkMs){
  if(st.extra===0){
   for(let dd=1;dd<=LV.mate;dd++){mateNodes=0;mateDeadline=nowMs()+(dd<=1?60:300);const mm=mateSearch(st,me,dd);if(mm){aiWhy='詰ませに行く（'+(dd===1?'一手詰め':dd+'手詰めまで読み切った')+'）';return mm}}
   aiNodes=0;aiLimit=1e6;
-  const dt=LV.mate>=1?defendThreat(st,me):null;if(dt&&dt.m){aiWhy=dt.why;return dt.m}
+  const dt=LV.mate>=1?defendThreat(st,me):null;if(dt&&dt.m){aiWhy=dt.why;aiHopeless=(typeof dt.why==='string'&&dt.why.indexOf('粘る')>=0);aiLastInfo=dt.score!=null?{depth:2,nodes:0,score:dt.score}:null;return dt.m}
  }
  const pen=new Map();
  for(const m of legal){let x=0;
@@ -1496,7 +1499,7 @@ function mkWorker(){
   const shim="self.window=self;self.document={getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{},documentElement:{}};self.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\n";
   const glue="\n;self.onmessage=function(e){const d=e.data;let out=null;try{"+
    "if(d.t==='rank'){rankScale=2;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
-   "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy}}"+
+   "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy,score:(aiLastInfo?aiLastInfo.score:null),hopeless:aiHopeless}}"+
    "}catch(err){out={error:String(err&&err.stack||err)}}postMessage({id:d.id,out:out})};";
   const src=shim+document.scripts[0].textContent+glue;
   const w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
@@ -1513,10 +1516,11 @@ async function callRank(x,extra){
  if(o&&!o.error)return o;
  return rankPos(x,extra);
 }
+let cpuScore=null,cpuHopeless=false,lostCnt=0;
 async function chooseA(x){
  const o=await wcall(cpuW,{t:'choose',st:x,aiLevel:aiLevel,aiSide:aiSide,planId:aiPlan&&aiPlan.id,castle:aiPlan&&aiPlan.castle,aim:aiAim,aiStyle:aiStyle,aiSeed:aiSeed,aiLast:aiLast,ad:{acpl:ad.acpl,n:ad.n,adj:ad.adj,band:ad.band},seen:[...seen]});
- if(o&&!o.error&&o.move!==undefined){aiWhy=o.why;return o.move}
- return chooseAI(x,4,seen);
+ if(o&&!o.error&&o.move!==undefined){aiWhy=o.why;cpuScore=o.score;cpuHopeless=!!o.hopeless;return o.move}
+ const mm=chooseAI(x,4,seen);cpuScore=aiLastInfo?aiLastInfo.score:null;cpuHopeless=aiHopeless;return mm;
 }
 let hum=[true,false];try{const h=JSON.parse(localStorage.getItem('sb_hum')||'null');if(Array.isArray(h)&&h.length===2)hum=[!!h[0],!!h[1]]}catch(e){}
 const isHum=sd=>!!hum[sd],humOne=()=>hum[0]!==hum[1],humSide=()=>hum[0]?0:1;
@@ -1715,6 +1719,13 @@ function maybeAI(){
    {const sx=st;m=await chooseA(sx);if(st!==sx||st.win!==null||isHum(st.turn)){aiBusy=false;return}}
   }
   aiBusy=false;
+  // 勝ち目が無い局面(詰みが避けられない／形勢が大差)では、無駄な手を続けず投了する(人対CPU・特殊ルールなしのときだけ)
+  if(m&&st.sp===false&&humOne()&&aiMoves>=14){
+   const sc=cpuScore;
+   const mated=cpuHopeless||(sc!==null&&sc<=-29000);
+   if(sc!==null&&sc<=-1800&&!mated)lostCnt++;else if(!mated)lostCnt=0;
+   if(mated||lostCnt>=3){lostCnt=0;st.win=1-s;endReason='相手が投了（勝ち目が無いと判断）';ovHidden=false;say('相手が投了した');render();save();return}
+  }else if(!m||st.sp!==false||!humOne())lostCnt=0;
   P.plan=aiPlan;P.aim=aiAim;P.moves=aiMoves;
   if(!m){st.win=1-s;endReason='指せる手がない（詰み）';render();return}
   pendingWhy=aiWhy;aiLast=m.d?null:{f:m.f,to:m.to};P.last=aiLast;

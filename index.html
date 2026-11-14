@@ -182,7 +182,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.52";
+const VERSION="0.9.53";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1730,7 +1730,7 @@ const FXW=[['w1','金の紙吹雪'],['w2','桜吹雪'],['w3','花火'],['w4','�
 const FXL=[['l1','暗転して揺れる'],['l2','色が抜ける'],['l3','ひび割れ'],['l4','雨'],['l5','墨がにじむ'],['l6','駒が崩れ落ちる']];
 try{const a=localStorage.getItem('sb_fx_w'),b=localStorage.getItem('sb_fx_l');if(a==='rand'||a==='none'||FXW.some(x=>x[0]===a))fxPickW=a;if(b==='rand'||b==='none'||FXL.some(x=>x[0]===b))fxPickL=b}catch(e){}
 try{if(localStorage.getItem('sb_voice')==='0')fxVoiceOn=false}catch(e){}
-const FXV={lose:['お前の負けだ','勝負あったな','出直してこい','まだまだ甘いな'],win:['まいった…','やるじゃないか','見事だ','次は負けないぞ']};
+const FXV={lose:['お前の負けだ','勝負あったな','出直してこい','まだまだ甘いな'],win:['お前の勝ちだ','見事だ','勝負あり、天晴れ','よくぞ勝った']};
 const fxVoiceOK=()=>'speechSynthesis' in window&&typeof SpeechSynthesisUtterance!=='undefined';
 function fxSpeak(t){
  if(!fxVoiceOn||muted||!fxVoiceOK()||vol.alert<=0.005)return;
@@ -1738,7 +1738,7 @@ function fxSpeak(t){
 }
 function fxLine(win,reason){
  if(!humOne())return '';
- if(win&&/相手が投了/.test(reason))return 'まいった…';
+ if(win&&/相手が投了/.test(reason))return '敵は降参した。お前の勝ちだ';
  if(!win&&/あなた.*投了/.test(reason))return '勝負あったな';
  const L=win?FXV.win:FXV.lose;return L[Math.floor(Math.random()*L.length)];
 }

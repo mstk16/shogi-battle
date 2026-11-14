@@ -168,7 +168,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.41";
+const VERSION="0.9.42";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -494,7 +494,7 @@ function curLV(){
 function adLabel(){const s=adS();return ADN[Math.round(s)]+'相当('+s.toFixed(1)+')'}
 function evalPos(x){const r=Eng.choose(x,{ms:80,maxDepth:4,noise:0,seed:0,side:x.turn});return r&&r.depth>0?r.score:null}
 const KJ='一二三四五六七八九';
-let evBusy=false,evOn=true,rec=[],hints=[],hintMv=null,hintCount=0,curEv=null;
+let lastBadSnd=0,evBusy=false,evOn=true,rec=[],hints=[],hintMv=null,hintCount=0,curEv=null;
 try{evOn=localStorage.getItem('sb_ev')!=='0'}catch(e){}
 const sqN=(r,c)=>(9-c)+KJ[r];
 const pnm=pc=>pc.p&&PROM[pc.t]?PROM[pc.t]:pc.t;
@@ -568,6 +568,8 @@ function analyzeFrom(R,mv){
  return{rank:rk,nAll:R.all.length,best:best,played:pl,dep:R.dep,tieDep:R.tieDep,spread:clV(R.list[0].v)-clV(R.list[Math.min(3,R.list.length-1)].v),tied:R.list.filter(y=>y.m!==best.m&&clV(best.v)-clV(y.v)<=10).length,loss:Math.max(0,clV(best.v)-clV(pl.v))};
 }
 async function analyzeMove(q){
+ // 自分がもう2手以上先へ進んでいるなら、古い評価は捨てる(遅れて届いた評価が、まとめて表示・音になるのを防ぐ)
+ if(hist.length-q.no>=2){evBusy=false;renderEv();return}
  try{
   const R0=await callRank(q.b,[q.mv]);
   evBusy=false;
@@ -586,8 +588,9 @@ async function analyzeMove(q){
   const e={no:q.no,side:q.side||0,dep:an.dep,tie:an.tieDep||0,tied:an.tied||0,to:q.mv.to,fresh:true,t:mvText(q.b,q.mv,true),loss:loss,mk:g2[0],g:g2[1],gc:g2[2],unclear:unclear,hang:hang,rk:an.rank,nAll:an.nAll,after:clV(an.played.v),
    bestT:mvText(q.b,bl,true),bestV:clV(an.best.v),same:an.best.m===Eng.intMove(q.mv),
    bwhy:whyMove(q.b,bl),pwhy:whyMove(q.b,q.mv),reply:loss>GOODMAX?replyOf(q.b,q.mv):'',quiet:(q.no<6&&loss<=GOODMAX),pre:q.b,mo:q.mv,bm:bl};
-  rec.push(e);curEv=e;
-  if(evOn&&e.mk==='✖'&&!e.unclear&&!e.quiet)sfx('bad');
+  rec.push(e);
+  const fresh=(hist.length-q.no)<=0; // 次の自分の手を指した後に届いた古い評価は、記録(総合評価)にだけ残す
+  if(fresh){curEv=e;if(evOn&&e.mk==='✖'&&!e.unclear&&!e.quiet&&Date.now()-lastBadSnd>2500){lastBadSnd=Date.now();sfx('bad')}}
   if(aiLevel===5&&humOne()&&hist.length>=4&&!unclear){
    const w=Math.max(0.08,1/(ad.n+1));ad.acpl+=(Math.min(600,loss)-ad.acpl)*w;ad.n++;ad.samples++;
    const af=e.after;if(af>500)ad.band=Math.min(.8,ad.band+.2);else if(af<-500)ad.band=Math.max(-.8,ad.band-.2);else ad.band*=.85;
@@ -1492,7 +1495,7 @@ function mkWorker(){
  try{
   const shim="self.window=self;self.document={getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{},documentElement:{}};self.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};\n";
   const glue="\n;self.onmessage=function(e){const d=e.data;let out=null;try{"+
-   "if(d.t==='rank'){rankScale=4;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
+   "if(d.t==='rank'){rankScale=2;const R=rankPos(d.st,d.extra||[]);out=R?{list:R.list,all:R.all,dep:R.dep,tieDep:R.tieDep,key:R.key}:null}"+
    "else if(d.t==='choose'){aiLevel=d.aiLevel;aiSide=d.aiSide;aiPlan=d.planId?(PLANS.find(x=>x.id===d.planId)||null):null;if(aiPlan&&d.castle&&aiPlan.castle!==d.castle)aiPlan=Object.assign({},aiPlan,{castle:d.castle});aiAim=d.aim;aiStyle=d.aiStyle;aiSeed=d.aiSeed;aiLast=d.aiLast;ad.acpl=d.ad.acpl;ad.n=d.ad.n;ad.adj=d.ad.adj;ad.band=d.ad.band;const m=chooseAI(d.st,4,new Map(d.seen));out={move:m,why:aiWhy}}"+
    "}catch(err){out={error:String(err&&err.stack||err)}}postMessage({id:d.id,out:out})};";
   const src=shim+document.scripts[0].textContent+glue;

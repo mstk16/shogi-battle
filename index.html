@@ -98,6 +98,19 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #dlg .bx{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(320px,86vw)}
 #dlg .bt{display:flex;gap:8px;margin-top:14px}#dlg .bt button{flex:1;padding:10px 6px}
 #dlg #dy{background:#185FA5;color:#fff;border-color:#185FA5}
+/* 内画面(Fold等・幅640px以上): 左=盤を画面の高さいっぱいに大きく／右=持ち駒・状態・ボタン(将棋ウォーズ式に盤を最優先) */
+@media(min-width:640px){
+ :root{--bsz:min(calc(100vh - 16px),calc(100vw - 226px))}
+ #app{max-width:none;display:grid;grid-template-columns:var(--bsz) minmax(190px,1fr);column-gap:12px;align-items:start;align-content:start;padding:8px 12px}
+ #bw{grid-column:1;grid-row:1/span 20;width:var(--bsz)}
+ #app>*:not(#bw):not(svg){grid-column:2}
+ .hand.tray{flex-wrap:wrap;height:auto;min-height:54px;overflow:visible}
+ #ctl{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+ #ctl button{height:40px;padding:0 4px;font-size:13px}
+ #hd{flex-wrap:wrap}
+ #hum{grid-template-columns:1fr;height:auto;gap:6px}
+ #hum .hs button{height:34px}
+}
 </style></head><body><div id="app">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="kg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE9B0"/><stop offset=".5" stop-color="#F4C677"/><stop offset="1" stop-color="#DC9F48"/></linearGradient></defs></svg>
 <div class="row" id="hd"><b style="color:var(--ink)">将棋バトル</b><span id="ver"></span><span style="flex:1"></span>
@@ -129,7 +142,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.32";
+const VERSION="0.9.34";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};

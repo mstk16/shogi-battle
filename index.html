@@ -129,7 +129,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.31";
+const VERSION="0.9.32";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1495,7 +1495,9 @@ function komaSVG(pc,atkOn){
   +'<path d="M50 9 L21 24 L13 91" fill="none" stroke="#FFF6D6" stroke-width="2" stroke-linecap="round" opacity=".6"/>'
   +t+at+'</g></svg>';
 }
-function pieceHTML(pc){return komaSVG(pc,face===2)}
+// 駒の攻撃力(ポイント)の表記は、特殊ルールありの時だけ(特殊ルールなしでは攻撃力は使わない)
+const showPts=()=>face===2&&st.sp!==false;
+function pieceHTML(pc){return komaSVG(pc,showPts())}
 function bar(label,v,col){return '<div class="row"><span style="width:36px">'+label+'</span><div class="hp"><i style="width:'+Math.round(v/HPMAX*100)+'%;background:'+col+'"></i></div><span style="width:64px;text-align:right">'+v+' / '+HPMAX+'</span></div>'}
 function gauge(n,col){let s='';for(let i=0;i<GMAX;i++)s+='<span class="g" style="background:'+(i<n?col:'transparent')+'"></span>';return s}
 function legal(){
@@ -1520,7 +1522,7 @@ function render(){
  $('bd').innerHTML=h;
  $('top').innerHTML=bar('相手'+(st.turn===1&&st.win===null?'●':''),st.hp[1],'#A32D2D')+'<div class="row" style="margin:4px 0 0 36px">必殺 '+gauge(st.g[1],'#A32D2D')+(aiPlan?'<span style="margin-left:auto">'+aiPlan.name+'</span>':'')+'</div>';
  const trayHTML=(sd,btn)=>{const ks=Object.keys(st.h[sd]).filter(t=>st.h[sd][t]>0);let h='';
-  ks.forEach(t=>{const inner='<span class="hc">'+komaSVG({t,p:false,s:sd},face===2)+(st.h[sd][t]>1?'<span class="bg">×'+st.h[sd][t]+'</span>':'')+'</span>';
+  ks.forEach(t=>{const inner='<span class="hc">'+komaSVG({t,p:false,s:sd},showPts())+(st.h[sd][t]>1?'<span class="bg">×'+st.h[sd][t]+'</span>':'')+'</span>';
    h+=btn?'<button class="hb'+(handSel===t?' on':'')+(hintMv&&hintMv.d===t?' hint':'')+'" data-h="'+t+'" aria-label="'+t+' '+st.h[sd][t]+'枚">'+inner+'</button>':'<span class="hb">'+inner+'</span>'});
   return h||'<span class="none">持ち駒なし</span>'};
  $('eh').innerHTML='<span class="lb">'+(isHum(1)&&isHum(0)?'上△':(isHum(1)?'あなた':'相手'))+'</span>'+trayHTML(1,isHum(1));
@@ -1531,7 +1533,7 @@ function render(){
   $('top').innerHTML='<div class="row" style="height:20px"><span style="width:36px">相手'+(st.turn===1&&st.win===null?'●':'')+'</span><span style="margin-left:auto">'+(aiPlan?aiPlan.name:'')+'</span></div>';
   $('bot').innerHTML='<div class="row" style="height:20px"><span style="width:36px">自分'+(st.turn===0&&st.win===null?'●':'')+'</span></div>';
  }else $('sp').onclick=special;
- $('fm').style.fontWeight=face===1?600:400;$('fc').style.fontWeight=face===2?600:400;
+ $('fm').style.display=$('fc').style.display=st.sp===false?'none':'';$('fm').style.fontWeight=face===1?600:400;$('fc').style.fontWeight=face===2?600:400;
  $('ver').textContent='v'+VERSION+(st.sp===false?'':' ・特殊ルール');$('lv').textContent='強さ:'+(aiLevel===5?adLabel():LEVELS[aiLevel].n);
  drawHints();drawLast();
  if(st.win!==null){const hw=humOne()?(st.win===humSide()?0:1):null;recStat(hw);adFinish(hw);$('ovt').textContent=humOne()?(st.win===humSide()?'あなたの勝ち':'相手の勝ち'):(st.win===0?'下▲の勝ち':'上△の勝ち');$('ovr').textContent=endReason;$('over').style.display=ovHidden?'none':'flex';$('ovshow').style.display=ovHidden?'block':'none'}else{ovHidden=false;$('over').style.display='none';$('ovshow').style.display='none'}

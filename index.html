@@ -168,7 +168,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.43";
+const VERSION="0.9.44";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1719,13 +1719,8 @@ function maybeAI(){
    {const sx=st;m=await chooseA(sx);if(st!==sx||st.win!==null||isHum(st.turn)){aiBusy=false;return}}
   }
   aiBusy=false;
-  // 勝ち目が無い局面(詰みが避けられない／形勢が大差)では、無駄な手を続けず投了する(人対CPU・特殊ルールなしのときだけ)
-  if(m&&st.sp===false&&humOne()&&aiMoves>=14){
-   const sc=cpuScore;
-   const mated=cpuHopeless||(sc!==null&&sc<=-29000);
-   if(sc!==null&&sc<=-1800&&!mated)lostCnt++;else if(!mated)lostCnt=0;
-   if(mated||lostCnt>=3){lostCnt=0;st.win=1-s;endReason='相手が投了（勝ち目が無いと判断）';ovHidden=false;say('相手が投了した');render();save();return}
-  }else if(!m||st.sp!==false||!humOne())lostCnt=0;
+  // 投了するのは「3手以内の詰みが避けられない」と分かった時だけ(それまでは形勢が悪くても粘る)。人対CPU・特殊ルールなしのときだけ
+  if(m&&st.sp===false&&humOne()&&aiMoves>=14&&cpuHopeless){st.win=1-s;endReason='相手が投了（3手以内の詰みが避けられない）';ovHidden=false;say('相手が投了した');render();save();return}
   P.plan=aiPlan;P.aim=aiAim;P.moves=aiMoves;
   if(!m){st.win=1-s;endReason='指せる手がない（詰み）';render();return}
   pendingWhy=aiWhy;aiLast=m.d?null:{f:m.f,to:m.to};P.last=aiLast;

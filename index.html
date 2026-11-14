@@ -23,7 +23,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 .hand.tray{background:#C99A4E;border:1px solid #8A5A1E;border-radius:8px;padding:4px 8px;gap:10px;height:54px;min-height:54px;box-sizing:border-box;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;color:#2C1A08}
 .hand.tray::-webkit-scrollbar{display:none}.hand.tray .hb{flex:none}
 .lb{font-size:12px;font-weight:500;color:#2C1A08}.none{font-size:12px;color:#2C1A08}
-.kv{width:86%;height:auto;display:block;filter:drop-shadow(1px 2px 1.5px rgba(40,22,5,.55))}
+.kv{width:90%;height:auto;display:block;filter:drop-shadow(1px 2px 1.5px rgba(30,16,3,.7))}
 @keyframes land{0%{transform:translateY(-7px) scale(1.14)}60%{transform:translateY(1px) scale(.98)}100%{transform:none}}
 .rip{position:absolute;left:50%;top:50%;width:22%;height:22%;margin:-11% 0 0 -11%;border:2px solid rgba(179,38,30,.6);border-radius:50%;animation:rip .55s ease-out forwards;pointer-events:none;z-index:2}
 @keyframes rip{from{transform:scale(1);opacity:.7}to{transform:scale(2.6);opacity:0}}
@@ -96,7 +96,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #dlg .bt{display:flex;gap:8px;margin-top:14px}#dlg .bt button{flex:1;padding:10px 6px}
 #dlg #dy{background:#185FA5;color:#fff;border-color:#185FA5}
 </style></head><body><div id="app">
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="kg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F4D58E"/><stop offset=".55" stop-color="#E8BE6E"/><stop offset="1" stop-color="#C99440"/></linearGradient></defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="kg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE9B0"/><stop offset=".5" stop-color="#F4C677"/><stop offset="1" stop-color="#DC9F48"/></linearGradient></defs></svg>
 <div class="row" id="hd"><b style="color:var(--ink)">将棋バトル</b><span id="ver"></span><span style="flex:1"></span>
 <button id="snd" aria-label="効果音">♪</button><button id="fm">駒のみ</button><button id="fc">攻撃力</button><button id="upd">更新確認</button></div>
 <div id="top" style="margin-top:8px"></div>
@@ -126,7 +126,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.24";
+const VERSION="0.9.25";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1340,8 +1340,10 @@ function sqOf(f,r,side){return side===0?[r-1,9-f]:[9-r,f-1]}
 function planSquares(plan,aim,side){
  const out=[];
  for(const [f,r,t] of CASTLES[plan.castle])out.push([...sqOf(f,r,side),t,plan.castle==='穴熊'&&t==='王'?10:(t==='王'?8:12)]);
+ // 石田流など狙いに飛車の位置を含む形: まず飛車を7八へ振り(目標1)、そこから浮く(目標2・より大きい)。浮く位置を重く、駒ごとに順序がつくよう重みを変える
+ const aimRook=!!(aim&&AIMS[aim]&&AIMS[aim].some(x=>x[2]==='飛'));
  if(plan.rook){const [f,r]=plan.rook;out.push([...sqOf(f,r,side),'飛',10])}
- if(aim&&AIMS[aim])for(const [f,r,t] of AIMS[aim])out.push([...sqOf(f,r,side),t,5]);
+ if(aim&&AIMS[aim])for(const [f,r,t] of AIMS[aim])out.push([...sqOf(f,r,side),t,aimRook?(t==='飛'?18:t==='歩'?12:8):5]);
  return out;
 }
 // 今の盤が計画の形にどれだけ近いか（そのsideの駒だけ数える）
@@ -1469,15 +1471,20 @@ const newStore=()=>[{plan:null,aim:null,moves:0,last:null},{plan:null,aim:null,m
 let planStore=newStore();
 const faceOf=pc=>pc.p?PROM[pc.t]:pc.t;
 function komaSVG(pc,atkOn){
- const k=faceOf(pc),col=pc.p?'#9D211A':'#2A1807',rot=pc.s===1?' transform="rotate(180 50 54)"':'';
+ // 参考: 将棋ウォーズ風。明るい木の駒＋濃い縁取り＋下側の厚み(立体感)＋真っ黒で太い文字(成駒は濃い赤)
+ const k=faceOf(pc),col=pc.p?'#C0120A':'#0B0603',rot=pc.s===1?' transform="rotate(180 50 54)"':'';
  const a=Math.round(ATK[pc.t]*(pc.p?1.5:1));
- const tx=(x,y,fs,str,f,dx)=>'<text x="'+(x+dx)+'" y="'+(y+dx)+'" text-anchor="middle" font-size="'+fs+'" font-weight="500" fill="'+f+'" font-family="serif"'+(dx?' opacity=".6"':'')+'>'+str+'</text>';
+ const tx=(x,y,fs,str)=>'<text x="'+x+'" y="'+y+'" text-anchor="middle" font-size="'+fs+'" font-weight="900" fill="'+col+'" stroke="'+col+'" stroke-width="'+(fs*.045).toFixed(2)+'" stroke-linejoin="round" font-family="serif">'+str+'</text>';
  let t='';
- if(k.length>1){const y1=atkOn?30:40,y2=atkOn?60:76,fs=atkOn?24:30;
-  for(const [d,f] of [[1.6,'#FFF1C9'],[0,col]])t+=tx(50,y1,fs,k[0],f,d)+tx(50,y2,fs,k[1],f,d)}
- else{const y=atkOn?58:66,fs=atkOn?38:46;for(const [d,f] of [[1.6,'#FFF1C9'],[0,col]])t+=tx(50,y,fs,k,f,d)}
- const at=atkOn?'<text x="50" y="92" text-anchor="middle" font-size="16" font-weight="500" fill="'+col+'">'+a+'</text>':'';
- return '<svg class="kv" viewBox="0 0 100 108"><g'+rot+'><polygon points="50,4 84,22 92,100 8,100 16,22" fill="url(#kg)" stroke="#7A4B16" stroke-width="3" stroke-linejoin="round"/><polygon points="50,12 78,27 85,94 15,94 22,27" fill="none" stroke="#FFF1C9" stroke-width="1.6" opacity=".7"/><path d="M26 34 Q50 30 74 34 M24 54 Q50 50 76 54 M22 74 Q50 70 78 74" stroke="#B98A3C" stroke-width="1" fill="none" opacity=".45"/>'+t+at+'</g></svg>';
+ if(k.length>1){const y1=atkOn?30:40,y2=atkOn?60:76,fs=atkOn?25:31;t=tx(50,y1,fs,k[0])+tx(50,y2,fs,k[1])}
+ else{const y=atkOn?58:65,fs=atkOn?40:48;t=tx(50,y,fs,k)}
+ const at=atkOn?'<text x="50" y="92" text-anchor="middle" font-size="16" font-weight="900" fill="'+col+'">'+a+'</text>':'';
+ return '<svg class="kv" viewBox="0 0 100 108"><g'+rot+'>'
+  +'<polygon points="50,9 84,27 92,104 8,104 16,27" fill="#7A4A12" stroke="#2A1704" stroke-width="3" stroke-linejoin="round"/>'
+  +'<polygon points="50,3 84,21 92,97 8,97 16,21" fill="url(#kg)" stroke="#2A1704" stroke-width="3" stroke-linejoin="round"/>'
+  +'<path d="M50 9 L21 24 L13 91" fill="none" stroke="#FFF6D6" stroke-width="2.2" stroke-linecap="round" opacity=".85"/>'
+  +'<path d="M17 95 L83 95" stroke="#B87420" stroke-width="2" opacity=".6"/>'
+  +t+at+'</g></svg>';
 }
 function pieceHTML(pc){return komaSVG(pc,face===2)}
 function bar(label,v,col){return '<div class="row"><span style="width:36px">'+label+'</span><div class="hp"><i style="width:'+Math.round(v/HPMAX*100)+'%;background:'+col+'"></i></div><span style="width:64px;text-align:right">'+v+' / '+HPMAX+'</span></div>'}

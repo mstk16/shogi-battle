@@ -182,7 +182,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.54";
+const VERSION="0.9.55";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -508,7 +508,7 @@ function curLV(){
 function adLabel(){const s=adS();return ADN[Math.round(s)]+'相当('+s.toFixed(1)+')'}
 function evalPos(x){const r=Eng.choose(x,{ms:80,maxDepth:4,noise:0,seed:0,side:x.turn});return r&&r.depth>0?r.score:null}
 const KJ='一二三四五六七八九';
-let hintCache={key:'',h:null,m:''},lastBadSnd=0,evBusy=false,evOn=true,rec=[],hints=[],hintMv=null,hintCount=0,curEv=null;
+let quickEv=null,hintCache={key:'',h:null,m:''},lastBadSnd=0,evBusy=false,evOn=true,rec=[],hints=[],hintMv=null,hintCount=0,curEv=null;
 try{evOn=localStorage.getItem('sb_ev')!=='0'}catch(e){}
 const sqN=(r,c)=>(9-c)+KJ[r];
 const pnm=pc=>pc.p&&PROM[pc.t]?PROM[pc.t]:pc.t;
@@ -525,6 +525,23 @@ const clV=v=>Math.abs(v)>=29000?(v>0?9000:-9000):Math.max(-8000,Math.min(8000,v)
 function matchLegal(x,o,side){return legalMoves(x,side).find(m=>o.d?(m.d===o.d&&m.to[0]===o.to[0]&&m.to[1]===o.to[1]):(!m.d&&m.f[0]===o.f[0]&&m.f[1]===o.f[1]&&m.to[0]===o.to[0]&&m.to[1]===o.to[1]&&!!m.pr===!!o.pr))}
 function hangVal(x,s){const at=attackMap(x,1-s),df=attackMap(x,s);let v=0;
  for(let k=0;k<81;k++){const pc=x.b[k];if(pc&&pc.s===s&&pc.t!=='王'&&at.cnt[k]>0&&df.cnt[k]===0)v+=(VAL[pc.t]||0)}return v}
+// 指した直後に分かる極端な悪手(読みを待たない): 駒をただで取られる・大きい駒を安い駒で取られる。
+// 王手の手は捨て駒の名手かもしれないので対象外。あとの本読みで違えば取り消す(「疑い」として出す)
+function quickBad(b,mv,sd){
+ try{
+  if(b.extra>0)return null;
+  const a=applyMove(b,mv),n=a.n;if(n.win!==null||inCheck(n,1-sd))return null;
+  const at=attackMap(n,1-sd),df=attackMap(n,sd),at0=attackMap(b,1-sd),df0=attackMap(b,sd),to=idx(mv.to[0],mv.to[1]);
+  const G=a.cap?pv(a.cap):0;let worst=0,wk=-1,free=false;
+  for(let k=0;k<81;k++){const pc=n.b[k];if(!pc||pc.s!==sd||pc.t==='王'||at.cnt[k]===0)continue;
+   const v=(pc.t==='角'||pc.t==='飛')?pv(pc):VAL[pc.t],fr=df.cnt[k]===0,ls=fr?v:v-at.mn[k];if(ls<=0)continue; // と金などは元の駒の値で数える(歩成を悪手と誤判定しない)
+   // 指す前から同じ危険にあった駒(この手のせいではない)は数えない
+   if(k!==to&&b.b[k]&&at0.cnt[k]>0){const l0=df0.cnt[k]===0?v:v-at0.mn[k];if(l0>=ls)continue}
+   if(ls>worst){worst=ls;wk=k;free=fr}}
+  if(wk<0||worst-G<50)return null;
+  return '「'+n.b[wk].t+'」を'+(free?'ただで取られそう':'安い駒で取られそう');
+ }catch(e){return null}
+}
 function whyMove(x,m){
  const side=x.turn,a=applyMove(x,m),n=a.n,ph=[];
  if(a.cap)ph.push('「'+a.cap.t+'」を取れる');
@@ -653,11 +670,13 @@ async function analyzeMove(q){
 function renderEv(){
  const box=document.getElementById('evl');if(!box)return;
  let h='';
- if(evOn&&evBusy)h+='<span class="evl0">'+(humOne()?'あなたの手':'この手')+'</span><span style="color:var(--sub)">評価中…</span>';
+ if(evOn&&evBusy&&quickEv&&quickEv.no===hist.length)h+='<span class="evl0">'+(humOne()?'あなたの手':'この手')+'</span><span class="evg g3" style="opacity:.75">✖ 悪手の疑い：'+quickEv.t+'</span><span style="color:var(--sub)">　確認中…</span>';
+ else if(evOn&&evBusy)h+='<span class="evl0">'+(humOne()?'あなたの手':'この手')+'</span><span style="color:var(--sub)">評価中…</span>';
  else if(evOn&&curEv&&!curEv.quiet&&!curEv.unclear){const e=curEv;
   h+='<span class="evl0">'+(humOne()?'あなたの手':(e.side===0?'下▲の手':'上△の手'))+'</span><span class="evg '+e.gc+'">'+e.mk+' '+e.g+'</span><button id="evd">詳細</button>';}
  else if(evOn&&!evBusy&&curEv&&curEv.unclear&&!curEv.quiet)h+='<span style="color:var(--sub)">この手は評価なし（差が付かない局面）</span>';
  else if(evOn&&!evBusy&&curEv&&curEv.quiet)h+='<span style="color:var(--sub)">序盤は評価を省略</span>';
+ if(evOn&&!evBusy&&quickEv&&curEv&&quickEv.no===curEv.no&&!(curEv.mk==='✖'&&!curEv.unclear&&!curEv.quiet))h+='<span style="color:var(--sub)">　（悪手の疑いは取り消し）</span>';
  if(hints.length){h+='<span class="evh">ヒント</span>'+hints.map((x,i)=>'<span class="hch" style="background:'+HC[i]+'"><b>'+'①②③'[i]+'</b> '+x.t+'</span>').join('');}
  box.innerHTML=h;
  const d=document.getElementById('evd');if(d)d.onclick=showEvDetail;
@@ -1851,7 +1870,7 @@ function play(mv){
  if(st.win!==null&&!endReason)endReason=(cap&&cap.t==='王')?'王を取った':'HPが0になった';
  say(t);render();fx(mv,cap,dmg,who,n);
  animMove(mv,who,cap,pre);
- if(isHum(who)){hints=[];hintMv=null;if(st.win===null&&st.sp===false&&st.extra===0&&(evOn||(aiLevel===5&&humOne())))ad.pend={b:stB,a:st,mv:mv,no:hist.length,side:who};else ad.pend=null;evBusy=!!(ad.pend&&evOn);renderEv();
+ if(isHum(who)){hints=[];hintMv=null;if(st.win===null&&st.sp===false&&st.extra===0&&(evOn||(aiLevel===5&&humOne())))ad.pend={b:stB,a:st,mv:mv,no:hist.length,side:who};else ad.pend=null;evBusy=!!(ad.pend&&evOn);quickEv=null;if(evBusy&&hist.length>=6){const qb=quickBad(stB,mv,who);if(qb)quickEv={no:hist.length,t:qb}}renderEv();
   if(ad.pend)setTimeout(()=>{if(ad.pend){const q=ad.pend;ad.pend=null;analyzeMove(q)}},60)}
  if(st.win!==null){setTimeout(()=>{sfx(humWon()?'win':'lose');flash(humWon()?'winfx':'chk',1800)},520)}else if(gaveCheck){setTimeout(()=>{sfx('chk');buzz([10,40,10])},420);setTimeout(()=>flash('chk',1500),380)}
  if(cap&&book)book.dead=true;save();maybeAI();
@@ -2019,7 +2038,7 @@ $('undo').onclick=()=>{
  if(aiBusy){say('相手が考え中。少し待ってから押してね');return}
  if(!hist.length){say('戻せる手がありません');return}
  const h=hist.pop();st=h.st;last=h.last;lastFrom=h.lf||null;lastCpu=!!h.lc;exMark=h.exMark;aiMoves=h.aiMoves;sel=handSel=null;endReason='';ovHidden=false;
- while(rec.length&&rec[rec.length-1].no>hist.length)rec.pop();curEv=rec.length?rec[rec.length-1]:null;hints=[];hintMv=null;renderEv();
+ while(rec.length&&rec[rec.length-1].no>hist.length)rec.pop();curEv=rec.length?rec[rec.length-1]:null;quickEv=null;hints=[];hintMv=null;renderEv();
  say('あなたの一手前に戻した');render();save();
 };
 $('resign').onclick=async()=>{

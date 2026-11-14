@@ -99,6 +99,8 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 #dlg .bx{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(320px,86vw)}
 #dlg .bt{display:flex;gap:8px;margin-top:14px}#dlg .bt button{flex:1;padding:10px 6px}
 #dlg #dy{background:#185FA5;color:#fff;border-color:#185FA5}
+/* ボタンの並び: 待った・ヒント・新しい対局・投了・評価・強さ(投了とヒントを入れ替え) */
+#ctl #undo{order:1}#ctl #hintb{order:2}#ctl #newg{order:3}#ctl #resign{order:4}#ctl #evt{order:5}#ctl #lv{order:6}
 @keyframes clkblink{50%{opacity:.55}}
 /* ボタン: 木の駒の世界観(明るい木色・濃い縁・下に厚み)。主役のボタンは深い赤で目立たせる */
 #ctl button,#hd button,#hum button,.seg button,#dlg button,#over button,#pnl button,#ovshow,#gostart{
@@ -168,7 +170,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.45";
+const VERSION="0.9.46";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};

@@ -115,10 +115,10 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 @media(min-width:640px) and (max-aspect-ratio:6/5){
  :root{--bsz:min(calc(100vw - 16px),calc(100vh - 248px))}
  #app{max-width:none;width:var(--bsz);margin:0 auto;padding:6px 0 8px;display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:3px;
-  grid-template-areas:"hd hd" "top eh" "bw bw" "bot mh" "hum evl" "ctl ctl" "cpub msg"}
+  grid-template-areas:"hd hd" "top eh" "bw bw" "mh bot" "hum evl" "ctl ctl" "cpub msg"}
  #hd{grid-area:hd;flex-wrap:nowrap}#top{grid-area:top;margin:0}#eh{grid-area:eh}#bw{grid-area:bw;width:var(--bsz)}#bot{grid-area:bot}#mh{grid-area:mh}
  #hum{grid-area:hum;margin:0}#ctl{grid-area:ctl;margin:0}#evl{grid-area:evl;margin:0}#cpub{grid-area:cpub;height:auto;min-height:0}#msg{grid-area:msg}
- .hand.tray{height:40px;min-height:40px;padding:1px 8px;flex-wrap:nowrap;overflow-x:auto}
+ .hand.tray{height:40px;min-height:40px;padding:1px 8px;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;gap:8px}.hand.tray .lb{display:none}
  #ctl{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}#ctl button{min-width:0;height:34px;padding:0 2px;font-size:12px;white-space:nowrap}
  #hd{height:26px}#hd button{padding:3px 7px}#top{margin:0!important}
  #bot .row,#top .row{flex-wrap:nowrap}#bot button{font-size:11px;padding:3px 6px;white-space:nowrap;line-height:1.2}
@@ -139,6 +139,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <button id="ovshow">結果を見る</button>
 <div id="setup"><div class="bx"><div style="font-size:18px;font-weight:500">対局の設定</div>
 <div class="lbl">特殊ルール（HP・コンボ・必殺）</div><div class="seg" id="segsp"><button data-v="1">あり</button><button data-v="0">なし</button></div>
+<div class="lbl">持ち時間（切れ負け）</div><div class="seg" id="segclk"><button data-v="0">なし</button><button data-v="600">10分</button><button data-v="300">5分</button><button data-v="180">3分</button><button data-v="120">2分</button><button data-v="60">1分</button></div>
 <div class="lbl">対局の形</div><div class="seg" id="segopp"><button data-v="0">あなた対CPU</button><button data-v="1">二人で自由</button><button data-v="2">CPU同士</button></div>
 <div class="lbl">あなたの手番</div><div class="seg" id="segfirst"><button data-v="0">先手</button><button data-v="1">後手</button><button data-v="2">ランダム</button></div>
 <div class="lbl">相手の強さ</div><div class="seg" id="seglv"><button data-v="0">入門</button><button data-v="1">やさしい</button><button data-v="2">ふつう</button><button data-v="3">つよい</button><button data-v="4">最強</button><button data-v="5">あわせる</button></div>
@@ -156,7 +157,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.35";
+const VERSION="0.9.36";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1548,7 +1549,7 @@ function render(){
  }
  $('bd').innerHTML=h;
  $('top').innerHTML=bar('相手'+(st.turn===1&&st.win===null?'●':''),st.hp[1],'#A32D2D')+'<div class="row" style="margin:4px 0 0 36px">必殺 '+gauge(st.g[1],'#A32D2D')+(aiPlan?'<span style="margin-left:auto">'+aiPlan.name+'</span>':'')+'</div>';
- const trayHTML=(sd,btn)=>{const ks=Object.keys(st.h[sd]).filter(t=>st.h[sd][t]>0);let h='';
+ const trayHTML=(sd,btn)=>{const ORD=['飛','角','金','銀','桂','香','歩'],ks=Object.keys(st.h[sd]).filter(t=>st.h[sd][t]>0).sort((a,b)=>ORD.indexOf(a)-ORD.indexOf(b));let h='';
   ks.forEach(t=>{const inner='<span class="hc">'+komaSVG({t,p:false,s:sd},showPts())+(st.h[sd][t]>1?'<span class="bg">×'+st.h[sd][t]+'</span>':'')+'</span>';
    h+=btn?'<button class="hb'+(handSel===t?' on':'')+(hintMv&&hintMv.d===t?' hint':'')+'" data-h="'+t+'" aria-label="'+t+' '+st.h[sd][t]+'枚">'+inner+'</button>':'<span class="hb">'+inner+'</span>'});
   return h||'<span class="none">持ち駒なし</span>'};
@@ -1560,6 +1561,7 @@ function render(){
   $('top').innerHTML='<div class="row" style="height:20px"><span style="width:36px">相手'+(st.turn===1&&st.win===null?'●':'')+'</span><span style="margin-left:auto">'+(aiPlan?aiPlan.name:'')+'</span></div>';
   $('bot').innerHTML='<div class="row" style="height:20px"><span style="width:36px">自分'+(st.turn===0&&st.win===null?'●':'')+'</span></div>';
  }else $('sp').onclick=special;
+ clkDraw();
  $('fm').style.display=$('fc').style.display=st.sp===false?'none':'';$('fm').style.fontWeight=face===1?600:400;$('fc').style.fontWeight=face===2?600:400;
  $('ver').textContent='v'+VERSION+(st.sp===false?'':' ・特殊ルール');$('lv').textContent='強さ:'+(aiLevel===5?adLabel():LEVELS[aiLevel].n);
  drawHints();drawLast();
@@ -1747,7 +1749,32 @@ $('snd').onclick=openVol;
 $('fm').onclick=()=>setFace(1);$('fc').onclick=()=>setFace(2);
 $('over').onclick=e=>{if(e.target===$('over')){ovHidden=true;render()}};
 $('ovshow').onclick=()=>{ovHidden=false;render()};
-function doRestart(sp,first){planStore=newStore();rec=[];hints=[];hintMv=null;hintCount=0;curEv=null;renderEv();ad.gid++;ad.band=0;ad.pend=null;ad.samples=0;endReason='';ovHidden=false;book=newBook();newStyle();aiPlan=null;aiMoves=0;seen=new Map();hist=[];exMark=0;st=newState(sp);st.turn=first===1?1:0;sel=handSel=last=null;lastFrom=null;lastCpu=false;say(oppChoice===1?'二人で対局。下▲・上△どちらもタップで指せます':oppChoice===2?'CPU同士の対局です。下のスイッチで、途中から人に切り替えられます':(first===1?'あなたは後手。相手が先に指す':(first===0?'あなたは先手':'')));render();save();if(!isHum(st.turn))maybeAI()}
+// ===== 持ち時間(切れ負け): 自分の番の間だけ減り、0になったら負け。CPUの番も実時間で減る(1手の読みは数秒以内) =====
+let clkChoice=0,clk={limit:0,t:[0,0],last:0};
+try{const v=+localStorage.getItem('sb_clk');if([0,60,120,180,300,600].includes(v))clkChoice=v}catch(e){}
+function clkInit(){clk={limit:clkChoice,t:[clkChoice*1000,clkChoice*1000],last:Date.now()}}
+function clkFmt(ms){const t=Math.max(0,ms);if(t<10000)return (t/1000).toFixed(1);const s=Math.ceil(t/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function clkDraw(){
+ for(const sd of [0,1]){
+  const row=document.querySelector(sd===1?'#top .row':'#bot .row');if(!row)continue;
+  let el=row.querySelector('.clk');
+  if(!clk.limit){if(el)el.remove();continue}
+  if(!el){el=document.createElement('span');el.className='clk';row.appendChild(el)}
+  const low=clk.t[sd]<10000,mine=st.turn===sd&&st.win===null;
+  el.textContent='⏱ '+clkFmt(clk.t[sd]);
+  el.style.cssText='margin-left:8px;font-weight:600;font-variant-numeric:tabular-nums;padding:1px 6px;border-radius:6px;white-space:nowrap;'+(low?'background:#A32D2D;color:#fff':(mine?'background:#185FA5;color:#fff':'color:var(--sub)'));
+ }
+}
+function clkTick(){
+ const now=Date.now();
+ if(!clk.limit||st.win!==null||$('setup').style.display==='flex'){clk.last=now;return}
+ const d=Math.min(now-clk.last,1000);clk.last=now;
+ const sd=st.turn;clk.t[sd]-=d;
+ if(clk.t[sd]<=0){clk.t[sd]=0;st.win=1-sd;endReason=(humOne()?(sd===humSide()?'あなた':'相手'):(sd===0?'下▲':'上△'))+'の持ち時間切れ';ovHidden=false;render();save();return}
+ clkDraw();
+}
+setInterval(clkTick,200);
+function doRestart(sp,first){clkInit();planStore=newStore();rec=[];hints=[];hintMv=null;hintCount=0;curEv=null;renderEv();ad.gid++;ad.band=0;ad.pend=null;ad.samples=0;endReason='';ovHidden=false;book=newBook();newStyle();aiPlan=null;aiMoves=0;seen=new Map();hist=[];exMark=0;st=newState(sp);st.turn=first===1?1:0;sel=handSel=last=null;lastFrom=null;lastCpu=false;say(oppChoice===1?'二人で対局。下▲・上△どちらもタップで指せます':oppChoice===2?'CPU同士の対局です。下のスイッチで、途中から人に切り替えられます':(first===1?'あなたは後手。相手が先に指す':(first===0?'あなたは先手':'')));render();save();if(!isHum(st.turn))maybeAI()}
 let spChoice=false,lvChoice=2,firstChoice=0,setupCancel=false;
 try{const f=localStorage.getItem('sb_first');if(f==='1'||f==='2')firstChoice=+f}catch(e){}
 try{if(localStorage.getItem('sb_sp')==='1')spChoice=true}catch(e){}
@@ -1786,15 +1813,17 @@ function refreshSetup(){
  pickA=new Set(planSel.att||[]);pickC=new Set(planSel.cas||[]);drawPlanUI();
  lvChoice=aiLevel;
  for(const b of $('segsp').children)b.classList.toggle('on',(b.dataset.v==='1')===spChoice);
+ for(const b of $('segclk').children)b.classList.toggle('on',+b.dataset.v===clkChoice);
  for(const b of $('seglv').children)b.classList.toggle('on',+b.dataset.v===lvChoice);
  for(const b of $('segfirst').children)b.classList.toggle('on',+b.dataset.v===firstChoice);
 }
 function openSetup(cancel){setupCancel=cancel;refreshSetup();$('setup').style.display='flex'}
 $('segsp').onclick=e=>{const b=e.target.closest('button');if(!b)return;spChoice=b.dataset.v==='1';for(const x of $('segsp').children)x.classList.toggle('on',x===b)};
+$('segclk').onclick=e=>{const b=e.target.closest('button');if(!b)return;clkChoice=+b.dataset.v;for(const x of $('segclk').children)x.classList.toggle('on',x===b)};
 $('segopp').onclick=e=>{const b=e.target.closest('button');if(!b)return;oppChoice=+b.dataset.v;for(const x of $('segopp').children)x.classList.toggle('on',x===b)};
 $('segfirst').onclick=e=>{const b=e.target.closest('button');if(!b)return;firstChoice=+b.dataset.v;for(const x of $('segfirst').children)x.classList.toggle('on',x===b)};
 $('seglv').onclick=e=>{const b=e.target.closest('button');if(!b)return;lvChoice=+b.dataset.v;for(const x of $('seglv').children)x.classList.toggle('on',x===b)};
-$('gostart').onclick=()=>{if(!plCount()){drawPlanUI();return}hum=oppChoice===1?[true,true]:oppChoice===2?[false,false]:[true,false];humSave();planSel.att=pickA.size?new Set(pickA):null;planSel.cas=pickC.size?new Set(pickC):null;planSelSave();aiLevel=lvChoice;try{localStorage.setItem('sb_sp',spChoice?'1':'0');localStorage.setItem('sb_lv2',aiLevel);localStorage.setItem('sb_first',firstChoice)}catch(e){}$('setup').style.display='none';doRestart(spChoice,firstChoice===2?(Math.random()<0.5?0:1):firstChoice)};
+$('gostart').onclick=()=>{if(!plCount()){drawPlanUI();return}hum=oppChoice===1?[true,true]:oppChoice===2?[false,false]:[true,false];humSave();planSel.att=pickA.size?new Set(pickA):null;planSel.cas=pickC.size?new Set(pickC):null;planSelSave();aiLevel=lvChoice;try{localStorage.setItem('sb_sp',spChoice?'1':'0');localStorage.setItem('sb_lv2',aiLevel);localStorage.setItem('sb_first',firstChoice);localStorage.setItem('sb_clk',clkChoice)}catch(e){}$('setup').style.display='none';doRestart(spChoice,firstChoice===2?(Math.random()<0.5?0:1):firstChoice)};
 $('setup').onclick=e=>{if(setupCancel&&e.target===$('setup'))$('setup').style.display='none'};
 $('rs').onclick=()=>openSetup(true);
 $('undo').onclick=()=>{
@@ -1818,7 +1847,7 @@ $('lv').onclick=()=>{aiLevel=(aiLevel+1)%LEVELS.length;try{localStorage.setItem(
 function save(){
  try{
   if(st.win!==null){localStorage.removeItem('sb_game');return}
-  localStorage.setItem('sb_game',JSON.stringify({v:1,st:st,last:last,planId:aiPlan&&aiPlan.id,aim:aiAim,aiMoves:aiMoves,exMark:exMark,hist:hist.slice(-40),rec:rec.slice(-80),lf:lastFrom,lc:lastCpu,hum:hum,ps:planStore.map(x=>({id:x.plan&&x.plan.id,aim:x.aim,moves:x.moves}))}));
+  localStorage.setItem('sb_game',JSON.stringify({v:1,st:st,last:last,planId:aiPlan&&aiPlan.id,aim:aiAim,aiMoves:aiMoves,exMark:exMark,hist:hist.slice(-40),rec:rec.slice(-80),lf:lastFrom,lc:lastCpu,hum:hum,clk:clk,ps:planStore.map(x=>({id:x.plan&&x.plan.id,aim:x.aim,moves:x.moves}))}));
  }catch(e){}
 }
 function loadGame(){
@@ -1828,6 +1857,7 @@ function loadGame(){
   st=j.st;last=j.last||null;aiPlan=PLANS.find(x=>x.id===j.planId)||null;aiAim=j.aim||null;aiMoves=j.aiMoves||0;exMark=j.exMark||0;lastFrom=Array.isArray(j.lf)?j.lf:null;lastCpu=!!j.lc;
   if(Array.isArray(j.hum)&&j.hum.length===2){hum=[!!j.hum[0],!!j.hum[1]];humSave()}
   planStore=newStore();if(Array.isArray(j.ps)&&j.ps.length===2){j.ps.forEach((x,i)=>{planStore[i]={plan:PLANS.find(y=>y.id===x.id)||null,aim:x.aim||null,moves:x.moves||0,last:null}})}else planStore[1]={plan:aiPlan,aim:aiAim,moves:aiMoves,last:null};
+  if(j.clk&&j.clk.limit&&Array.isArray(j.clk.t)){clk={limit:j.clk.limit,t:[+j.clk.t[0]||0,+j.clk.t[1]||0],last:Date.now()}}else clk={limit:0,t:[0,0],last:Date.now()};
   hist=Array.isArray(j.hist)?j.hist:[];rec=Array.isArray(j.rec)?j.rec:[];curEv=rec.length?rec[rec.length-1]:null;
   seen=new Map();{const k=posKey(st);seen.set(k,1)}
   return true;

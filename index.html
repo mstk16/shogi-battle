@@ -166,7 +166,7 @@ button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <div id="msg"></div>
 </div>
 <script>
-const VERSION="0.9.38";
+const VERSION="0.9.39";
 const HPMAX=100, GMAX=5;
 const ATK={'歩':6,'香':8,'桂':9,'銀':11,'金':12,'角':16,'飛':18,'王':14};
 const PROM={'歩':'と','香':'成香','桂':'成桂','銀':'成銀','角':'馬','飛':'龍'};
@@ -1250,8 +1250,12 @@ function defendThreat(st,me){
   if(nowMs()-t0>1300)break;
   const n=applyMove(st,m).n;
   if(n.win===me)return{m,why:'勝ち',thr};
-  const d=oppMateDepth(n,o,3);
+  let d=oppMateDepth(n,o,3);
   let sc;try{sc=qsearch(n,-1e9,1e9,me,0,4)}catch(e){sc=evalSt(n,me,0)}
+  // 王手で「詰みを遅らせる」のは見かけだけ(相手が王手に応じる1手ぶん延びるだけ)。持ち駒を捨てて王手を続ける自暴自棄な手を選ばないよう、
+  // 王手による遅れは数えず、持ち駒を打つ王手は点を引く。本当に詰みを消す手・駒を取る/守る手が優先される
+  const gaveChk=d<99&&inCheck(n,o);
+  if(gaveChk){d=d-1;if(m.d)sc-=80}
   if(d>bd||(d===bd&&sc>bs)){bd=d;bs=sc;best=m}
  }
  return{m:best,why:bd>=99?'詰めろを受ける（相手の詰み筋を消す）':'詰みを遅らせて粘る',thr};
